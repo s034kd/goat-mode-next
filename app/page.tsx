@@ -40,8 +40,6 @@ export default function GoatmodePage() {
       const cc = document.getElementById('char-count');
       if (cc) cc.textContent = `${len} / 1000`;
       if (len > 1000) el.value = el.value.slice(0, 1000);
-      const tb = document.getElementById('transform-btn') as HTMLButtonElement;
-      if (tb) tb.disabled = el.value.trim().length < 4;
     }
 
     function handleKey(e: KeyboardEvent) {
@@ -399,10 +397,10 @@ export default function GoatmodePage() {
         let inputHTML = '';
         if (q.type === 'text') {
           inputHTML = `<input class="q-input-line" id="qinput-${q.id}" data-idx="${i}" data-req="${q.req}"
-            placeholder="${q.ph}" oninput="(window as any).checkQAnswers()" autocomplete="off">`;
+            placeholder="${q.ph}" oninput="window.checkQAnswers && window.checkQAnswers()" autocomplete="off">`;
         } else {
           inputHTML = `<div class="q-opts">${q.opts.map((o: string, oi: number) =>
-            `<button class="q-opt" data-idx="${i}" data-oi="${oi}" data-req="${q.req}" onclick="(window as any).selectOpt(this)">${o}</button>`
+            `<button class="q-opt" data-idx="${i}" data-oi="${oi}" data-req="${q.req}" onclick="window.selectOpt && window.selectOpt(this)">${o}</button>`
           ).join('')}</div>`;
         }
 
