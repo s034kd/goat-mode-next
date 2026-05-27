@@ -288,14 +288,10 @@ export default function GoatmodePage() {
       await delay(700); donePhase(2);
       await delay(220);
 
-      if (isDemoMode) {
-        showQuestionsAndAutoFill();
-      } else {
-        const qEcho = document.getElementById('q-echo');
-        if (qEcho) qEcho.textContent = raw;
-        renderQuestions(generateQuestions(currentType));
-        showState('state-questions');
-      }
+      const qEcho = document.getElementById('q-echo');
+      if (qEcho) qEcho.textContent = raw;
+      renderQuestions(generateQuestions(currentType));
+      showState('state-questions');
     }
 
     /* ═══ TRANSFORM — STEP 2: answers → build prompt ═══ */
@@ -971,10 +967,7 @@ Transform this into a master prompt:`;
         boot.classList.add('out');
         app.classList.add('on');
         setTimeout(() => {
-          if (!sessionStorage.getItem('gm_demo_seen')) {
-            sessionStorage.setItem('gm_demo_seen', '1');
-            startDemo();
-          } else {
+          {
             const ri = document.getElementById('raw-input');
             if (ri) ri.focus();
           }
@@ -1052,7 +1045,7 @@ Transform this into a master prompt:`;
               <div className="api-status">&#9679; CONNECTED</div>
             </div>
 
-            <button className="transform-btn" id="transform-btn" onClick={() => (window as any).startTransform && (window as any).startTransform()} disabled>
+            <button className="transform-btn" id="transform-btn" onClick={() => (window as any).startTransform && (window as any).startTransform()}>
               &#9889; ENGINEER MASTER PROMPT
             </button>
           </div>
