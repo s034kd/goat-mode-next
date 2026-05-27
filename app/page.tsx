@@ -513,22 +513,25 @@ export default function GoatmodePage() {
         {screen === 'input' && (
           <div className="gm-screen gm-input">
             <div className="gm-input__hero">
-              <svg width="36" height="42" viewBox="0 0 100 115" fill="white" opacity="0.9">
-                <path d="M50 4 C51 12 51.8 26 52 42 C52.2 58 51.8 76 51.2 90 C50.8 102 50 113 50 114 C49.2 102 49 90 48.8 76 C48.2 58 47.8 42 48 26 C48.2 12 49 4 50 4Z"/>
-                <path d="M45 12 C28 7, 7 20, 5 40 C3 56, 10 70, 22 76 L30 70 C20 64, 14 52, 15 38 C16 24, 28 15, 45 12Z"/>
-                <path d="M55 12 C72 7, 93 20, 95 40 C97 56, 90 70, 78 76 L70 70 C80 64, 86 52, 85 38 C84 24, 72 15, 55 12Z"/>
-                <path d="M46 52 L13 62 C8 64, 7 72, 11 77 L44 74 L46 64Z"/>
-                <path d="M54 52 L87 62 C92 64, 93 72, 89 77 L56 74 L54 64Z"/>
-              </svg>
+              <div className="gm-input__logo-wrap">
+                <svg className="gm-input__logo" width="48" height="56" viewBox="0 0 100 115" fill="white">
+                  <path d="M50 4 C51 12 51.8 26 52 42 C52.2 58 51.8 76 51.2 90 C50.8 102 50 113 50 114 C49.2 102 49 90 48.8 76 C48.2 58 47.8 42 48 26 C48.2 12 49 4 50 4Z"/>
+                  <path d="M45 12 C28 7, 7 20, 5 40 C3 56, 10 70, 22 76 L30 70 C20 64, 14 52, 15 38 C16 24, 28 15, 45 12Z"/>
+                  <path d="M55 12 C72 7, 93 20, 95 40 C97 56, 90 70, 78 76 L70 70 C80 64, 86 52, 85 38 C84 24, 72 15, 55 12Z"/>
+                  <path d="M46 52 L13 62 C8 64, 7 72, 11 77 L44 74 L46 64Z"/>
+                  <path d="M54 52 L87 62 C92 64, 93 72, 89 77 L56 74 L54 64Z"/>
+                </svg>
+              </div>
               <h1 className="gm-input__wordmark">GOATMODE<span>.AI</span></h1>
-              <p className="gm-input__sub">Your rough idea → a prompt that actually gets results</p>
+              <p className="gm-input__sub">Turn any rough idea into a prompt that actually works</p>
+              <div className="gm-input__divider"/>
             </div>
 
             <div className="gm-input__box">
               <textarea
                 ref={textareaRef}
                 className="gm-textarea"
-                placeholder="What do you need to get done? Just talk to me..."
+                placeholder="What do you need to get done? Describe it like you'd tell a smart colleague..."
                 value={rawInput}
                 onChange={e => setRawInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleStart(); }}
@@ -543,8 +546,26 @@ export default function GoatmodePage() {
               onClick={handleStart}
               disabled={rawInput.trim().length < 3}
             >
-              ⚡ ENGINEER MASTER PROMPT
+              <span className="gm-btn-primary__icon">⚡</span>
+              <span className="gm-btn-primary__label">ENGINEER MASTER PROMPT</span>
             </button>
+
+            <div className="gm-examples">
+              <div className="gm-examples__label">TRY AN EXAMPLE</div>
+              <div className="gm-examples__grid">
+                {[
+                  'Email my boss asking for a raise',
+                  'Cold outreach to a potential client',
+                  'Explain quantum computing simply',
+                  'Write a 30-day content strategy',
+                ].map(ex => (
+                  <button key={ex} className="gm-examples__chip"
+                    onClick={() => { setRawInput(ex); setTimeout(() => textareaRef.current?.focus(), 50); }}>
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {history.length > 0 && (
               <div className="gm-history">
