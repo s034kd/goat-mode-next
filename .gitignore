@@ -1,0 +1,14 @@
+# deps
+node_modules/
+.next/
+
+# env — NEVER commit these
+.env.local
+.env*.local
+
+# build
+out/
+dist/
+
+# OS
+.DS_Store
