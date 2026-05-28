@@ -352,8 +352,13 @@ Output ONLY the improved prompt. Nothing else.`;
 }
 
 /* ─── IMAGE-SPECIFIC META PROMPT ────────────── */
-function buildImageMetaPrompt(): string {
-  return `You are an AI image prompt specialist. Turn the user's image idea into one dense, paste-ready visual description that works in DALL-E, Gemini Image, Midjourney, and Stable Diffusion.
+function buildImageMetaPrompt(model: TargetModel = 'claude'): string {
+  const generatorHint =
+    model === 'gpt4'   ? 'DALL-E 3 (inside ChatGPT). End the paragraph with: "--ar [ratio]". On a new line write: "Optimized for DALL-E 3."' :
+    model === 'gemini' ? 'Gemini\'s image generator (Imagen). End the paragraph with: "--ar [ratio]". On a new line write: "Optimized for Gemini Image."' :
+                         'Midjourney or Stable Diffusion. End the paragraph with: "--ar [ratio] --v 6.1". On a new line write: "Optimized for Midjourney."';
+
+  return `You are an AI image prompt specialist. Turn the user's image idea into one dense, paste-ready visual description.
 
 OUTPUT: One paragraph, 40-70 words. Nothing else. No headers, no labels, no explanation.
 
@@ -364,18 +369,18 @@ RULES:
 — Every detail must be visual and concrete — no "beautiful" or "amazing" — describe what makes it visually striking
 — Include: material/texture, colour palette, lighting type, camera style
 — End the paragraph with quality keywords: ultra-realistic, 8K, shallow depth of field, etc.
-— Last line only: aspect ratio (e.g. --ar 1:1) and target generator
+— Target generator: ${generatorHint}
 
 EXAMPLE:
 ✓ "Photorealistic luxury product photo, hand-blown amber glass perfume bottle named EL POPIS shaped like a Don Julio tequila bottle, agave plant etched in the glass, cork stopper tied with raw twine, aged parchment label with gold foil lettering, sitting on a weathered oak bar, blurred agave field visible through a dusty cantina window, warm golden-hour light raking across the glass, macro lens, ultra-realistic, 8K, shallow depth of field, warm amber and earth tones."
 
-Output ONLY the image prompt paragraph. No preamble.`;
+Output ONLY the image prompt paragraph + target generator line. No preamble.`;
 }
 
 /* ─── MODEL-AWARE META PROMPT ───────────────── */
 function buildMetaPromptForModel(model: TargetModel, profile: Profile | null, type = ''): string {
   // Image tasks need a completely different prompt format
-  if (type === 'image') return buildImageMetaPrompt();
+  if (type === 'image') return buildImageMetaPrompt(model);
 
   let base = buildMetaPrompt();
 
@@ -384,11 +389,58 @@ function buildMetaPromptForModel(model: TargetModel, profile: Profile | null, ty
     base = base.replace('Now write the direct request:', profileContext + '\nNow write the direct request:');
   }
 
-  // Model notes — ONLY about how the target model receives prompts, never change the format rules
-  if (model === 'gpt4') {
-    base += '\n\nNOTE: This prompt will be pasted as a USER MESSAGE into ChatGPT (not a system prompt). Make it read as a direct human request — not AI instructions. The direct-request format already handles this correctly.';
+  // ── Per-model style instructions — each model processes prompts differently ──
+  // These change HOW you write the prompt, not the direct-request format rule
+
+  if (model === 'claude') {
+    base += `
+
+TARGET MODEL: CLAUDE
+Claude handles nuanced, multi-constraint prompts better than any other model. Optimize for Claude:
+
+STYLE: Layered constraints with the reasoning behind them — Claude uses the WHY to make better decisions
+ADD: A brief reasoning hook before the main output: "(Think through [specific thing] before writing — e.g. 'Think through the reader's likely objection before writing')"
+ADD: A quality bar at the end: "The output passes only if: [specific observable standard a real person would recognize]"
+CONSTRAINT STYLE: Include WHY, not just WHAT — "(no apologies — they signal low confidence to the CFO)" not just "(no apologies)"
+
+EXAMPLE FOR RAISE EMAIL:
+"Write a raise-request email to Sarah (CFO) asking for exactly 20% — not a range — after closing a $2.3M deal in March. (Think through Sarah's likely objections before writing: budget cycles, optics to the rest of the team.) Under 100 words. No apologies, no salary comparisons, no ranges — each one signals low confidence. The email's only job: get a 30-minute meeting before Q3 reviews. The output passes only if Sarah reads it once and knows exactly what to do next. Start with: 'Sarah, I'd like 30 minutes'"
+
+The prompt should feel like a sharp briefing from someone who knows Claude thinks in depth.`;
+
+  } else if (model === 'gpt4') {
+    base += `
+
+TARGET MODEL: CHATGPT (GPT-4o)
+GPT-4o follows explicit structure and format templates more reliably than natural language constraints. Optimize for GPT-4o:
+
+STYLE: Template-driven with an explicit output structure and a "Do not include:" list
+ADD: An explicit format template at the end — "Format: [Subject line] → [Body] → [CTA]" or "Structure: 1) X, 2) Y, 3) Z"
+ADD: A "Do not include:" prohibition list — GPT-4o follows these more reliably than subtle constraint language
+ADD: Markdown hints if formatting matters — "(use **bold** for the subject line)", "(use ## for section headers)"
+CONSTRAINT STYLE: Explicit and listed, not woven inline — GPT-4o executes specific prohibitions very precisely
+
+EXAMPLE FOR RAISE EMAIL:
+"Write a raise-request email to Sarah (my CFO) asking for exactly 20% after closing a $2.3M deal. Under 100 words. Format: **Subject:** [line] | [1 sentence context] | [1 sentence ask] | [1 sentence close]. Do not include: apologies, salary comparisons, number ranges, 'I feel I deserve', lengthy justification. The email's only job is to get a 30-minute meeting — not to make the full case. Start with: '**Subject:**'"
+
+The prompt should feel like a precise spec with a clear template GPT can fill in.`;
+
   } else if (model === 'gemini') {
-    base += '\n\nNOTE: This prompt will be pasted as a USER MESSAGE into Gemini. Keep it as a direct human request. Gemini responds best to specific, concrete asks — which the direct-request format already provides. Do not add "Think step by step" or role-injection language.';
+    base += `
+
+TARGET MODEL: GEMINI
+Gemini executes numbered, structured, task-focused requests with high precision. Optimize for Gemini:
+
+STYLE: Numbered deliverables with explicit word counts — Gemini follows these extremely well
+ADD: A numbered output list — "Give me: 1) [thing], 2) [thing], 3) [thing]" instead of one flowing request
+ADD: Explicit word counts per section — "(subject line under 8 words)", "(body under 80 words)" — Gemini respects these precisely
+KEEP IT SIMPLER: Avoid complex constraint stacking — break it into clear numbered tasks instead
+ADD "step by step" where reasoning helps — Gemini follows this instruction reliably
+
+EXAMPLE FOR RAISE EMAIL:
+"Write a raise-request email. Context: to my CFO Sarah, asking for 20% after closing a $2.3M deal. Give me: 1) Subject line (under 8 words), 2) Email body (4 sentences, under 80 words total), 3) One follow-up line if no reply in 5 days. Constraints: no apologies, no ranges, no salary comparisons. Goal: get a 30-minute meeting — not win the raise in the email. Start with the subject line."
+
+The prompt should feel like a clear numbered task list — Gemini executes structured asks with high accuracy.`;
   }
 
   return base;
