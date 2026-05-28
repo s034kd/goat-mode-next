@@ -2,58 +2,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 /* ─── TYPES ─────────────────────────────────── */
-type Screen    = 'input' | 'chat' | 'thinking' | 'output';
-type BubRole   = 'ai' | 'user';
-type InputMode = 'build' | 'improve';
-interface Bub  { id: number; role: BubRole; text: string; opts?: string[]; }
-interface Saved{ id: string; raw: string; prompt: string; type: string; ts: number; }
-interface Q    { id: string; text: string; type: 'text' | 'opts'; opts?: string[]; }
+type Screen      = 'input' | 'chat' | 'thinking' | 'output';
+type BubRole     = 'ai' | 'user';
+type InputMode   = 'build' | 'improve';
+type TargetModel = 'claude' | 'gpt4' | 'gemini';
+type ActiveVariant = 'orig' | 'a' | 'b';
 
-/* ─── QUESTION BANK ─────────────────────────── */
-const QUESTIONS: Record<string, Q[]> = {
-  negotiation: [
-    { id:'q0', type:'text', text:'What result did you deliver recently — give me one number.' },
-    { id:'q1', type:'text', text:'What increase are you asking for?' },
-  ],
-  communication: [
-    { id:'q0', type:'text', text:'What\'s the core thing you need to say?' },
-    { id:'q1', type:'opts', opts:['A client','My boss','A colleague','My team'], text:'Who are you talking to?' },
-  ],
-  marketing: [
-    { id:'q0', type:'text', text:'Who exactly are you reaching? One sentence.' },
-    { id:'q1', type:'text', text:'What do you want them to do after reading?' },
-  ],
-  analysis: [
-    { id:'q0', type:'text', text:'Who reads this and what decision must it support?' },
-  ],
-  strategy: [
-    { id:'q0', type:'text', text:'What specific goal must this strategy achieve?' },
-    { id:'q1', type:'text', text:'What\'s the single biggest obstacle right now?' },
-  ],
-  coding: [
-    { id:'q0', type:'text', text:'Language, framework, or platform?' },
-    { id:'q1', type:'text', text:'What\'s the hardest part — what should I not miss?' },
-  ],
-  writing: [
-    { id:'q0', type:'text', text:'Who is this for — describe the reader in one sentence.' },
-    { id:'q1', type:'text', text:'What do you want them to feel or do after reading?' },
-  ],
-  creative: [
-    { id:'q0', type:'text', text:'Who is this creative work for — one sentence.' },
-    { id:'q1', type:'opts', opts:['Bold & provocative','Warm & human','Minimal & precise','Playful & surprising'], text:'What\'s the creative direction?' },
-  ],
-  education: [
-    { id:'q0', type:'text', text:'Who are you explaining this to? Describe their background.' },
-  ],
-  research: [
-    { id:'q0', type:'text', text:'What decision will this research inform?' },
-    { id:'q1', type:'opts', opts:['Executive summary','Deep academic dive','Competitive intel','Market landscape'], text:'What format do you need?' },
-  ],
-  email: [
-    { id:'q0', type:'opts', opts:['A potential client','My manager','A colleague','A vendor'], text:'Who is this email to?' },
-    { id:'q1', type:'text', text:'What\'s the single thing you need them to do?' },
-  ],
-};
+interface Bub   { id: number; role: BubRole; text: string; }
+interface Saved { id: string; raw: string; prompt: string; type: string; ts: number; }
+interface Conv  { q: string; a: string; }
+interface Profile { role: string; industry: string; tools: string; goals: string; }
 
 const THINKING_LINES = [
   'Reading your intent...',
@@ -61,7 +19,16 @@ const THINKING_LINES = [
   'Engineering the constraints...',
   'Calibrating precision...',
   'Locking in output format...',
-  'Final polish...',
+  'First draft complete...',
+];
+
+const CRITIQUE_LINES = [
+  'Auditing specificity...',
+  'Testing quality criteria...',
+  'Patching weak sections...',
+  'Anchoring key constraints...',
+  'Final refinement pass...',
+  'Locking in the upgrade...',
 ];
 
 const REFINE_CHIPS = ['Make it shorter','More direct','More formal','More aggressive','Add examples','Simpler language'];
@@ -158,58 +125,376 @@ function detectType(t: string): string {
 function calcScore(prompt: string): number {
   let s = 7.0;
   const len = prompt.length;
-  if (len > 400)  s += 0.4;
+  if (len > 400)  s += 0.3;
   if (len > 800)  s += 0.3;
   if (len > 1200) s += 0.2;
-  if (prompt.includes('<role>'))            s += 0.3;
-  if (prompt.includes('<constraints>'))     s += 0.2;
-  if (prompt.includes('<output_format>'))   s += 0.2;
+  if (len > 1800) s += 0.1;
+  if (prompt.includes('<role>'))             s += 0.3;
+  if (prompt.includes('<pre_work>'))         s += 0.3;
+  if (prompt.includes('<constraints>'))      s += 0.2;
+  if (prompt.includes('<output_format>'))    s += 0.2;
   if (prompt.includes('<quality_standard>')) s += 0.2;
-  if (/\d+%/.test(prompt))                  s += 0.2;
-  if (/\d+ years/.test(prompt))             s += 0.1;
-  if ((prompt.match(/<[a-z_]+>/g) || []).length >= 4) s += 0.1;
-  return Math.min(9.8, Math.max(7.8, +s.toFixed(1)));
+  if (/\d+%/.test(prompt))                   s += 0.15;
+  if (/\d+ years/.test(prompt))              s += 0.1;
+  if (/Do NOT/i.test(prompt))                s += 0.1;
+  if ((prompt.match(/<[a-z_]+>/g) || []).length >= 5) s += 0.15;
+  return Math.min(9.9, Math.max(7.8, +s.toFixed(1)));
 }
 
 /* ─── IMPROVE-MODE SYSTEM PROMPT ────────────── */
 function buildImprovePrompt(): string {
-  return `You are a world-class prompt engineer. The user has provided an existing prompt they want dramatically improved.
+  return `You are a master prompt architect. The user has given you an existing prompt — your job is to rebuild it from first principles until it operates at a 9.5/10 level.
 
-Make it 10× more effective:
-1. Add a specific named expert role with credentials, years of experience, and a track record
-2. Replace vague instructions with precise, measurable ones — every verb should have a concrete outcome
-3. Add an explicit output format specification with labelled sections
-4. Add a quality bar: what does "excellent" look like to the intended reader?
-5. Add 5+ hard constraints — things explicitly NOT to do
-6. Remove all filler, hedging, apologies, and platitudes
-7. Structure with XML tags: <role>, <context>, <objective>, <task>, <constraints>, <output_format>, <quality_standard>
+STEP 1 — DIAGNOSE (do this mentally, don't write it out):
+Read the prompt and identify every place it is:
+- Vague: a verb without a measurable outcome ("write a report" vs "write a 3-section report leading with the conclusion")
+- Generic: could apply to any situation, not THIS one
+- Missing: no role, no stakes, no failure conditions, no binary quality bar
+- Weak constraints: "be concise" instead of "never exceed 150 words per section — readers stop reading after that"
 
-Output ONLY the improved prompt — no preamble, no explanation, no meta-commentary.`;
+STEP 2 — REBUILD with all of these, in order:
+
+<role>
+Not a job title — a person. Include:
+• Named specialty tied to THIS exact task (not "expert in X" — "built 40+ X systems that survived Y condition")
+• A character trait they physically cannot suppress ("you have zero tolerance for placeholder logic")
+• What this expert REFUSES to do under any circumstances
+• 2-3 real metrics that prove they're the right person (%, $, users, years, failures survived)
+</role>
+
+<context>
+Decode the INTENT, not just the words. For every key phrase in the original prompt, ask: what does this really mean about the situation?
+• "my boss" → power asymmetry, political sensitivity, approval needed
+• "quickly" → deadline pressure changes the tradeoffs
+• Any tool named → must use it, not suggest alternatives
+Synthesize: who is the audience, what do they fear, what is the real stake?
+</context>
+
+<objective>
+One sentence: [action verb] + [specific output] + [for whom] + [to achieve what measurable result]
+</objective>
+
+<pre_work>
+Task-specific thinking before any output. Match the mode to the task:
+• CODING → "Map data flow end-to-end. List the 3 most likely runtime failures. State your architecture before writing line 1."
+• WRITING/COMMUNICATION → "Identify the reader's actual unstated question. Determine what they must feel by the last sentence. Write the ending first."
+• ANALYSIS → "Form 3 competing hypotheses. State what evidence would disprove each. Only then examine the data."
+• NEGOTIATION → "Model the other party's incentives, fears, and best alternative. Name the 2 sentences that end this conversation badly."
+• STRATEGY → "Find the binding constraint — the one thing that, if removed, changes everything. Sequence reversible actions before irreversible ones."
+• CREATIVE → "Generate the 3 most obvious approaches. Veto all of them. Ask: what would this look like if done nowhere else?"
+Pick the right mode. Combine modes for hybrid tasks.
+</pre_work>
+
+<task>
+6-9 numbered steps. Every step must:
+1. Reference specifics from context — never generic instructions
+2. Name what it builds on ("using the architecture from step 2...")
+3. End with a concrete, verifiable sub-output
+4. For code: name the exact library, pattern, and file
+5. Final step must always be: "Verify each quality criterion below is met before delivering"
+</task>
+
+<constraints>
+8+ rules. Ordered by criticality — most catastrophic failure first.
+Format for each: "Do NOT [exact behavior] — [specific reason it destroys value in THIS context]"
+Never write generic constraints. Every rule must be obviously specific to this task.
+</constraints>
+
+<output_format>
+Name every section, subsection, length, and format. Leave nothing to interpretation.
+Code: project tree + file reading order. Analysis: Pyramid Principle structure. Writing: section names + word counts.
+</output_format>
+
+<quality_standard>
+4-6 criteria. Each must be BINARY — pass or fail, no gray area.
+Format: "[Specific person] [specific observable action]"
+Example: "A skeptical CFO reads the executive summary and can make the decision without reading further."
+Never write: "high quality", "professional", "comprehensive" — these are not testable.
+</quality_standard>
+
+Output ONLY the rebuilt prompt — no preamble, no explanation, no meta-commentary.`;
 }
 
 /* ─── META PROMPT ───────────────────────────── */
 function buildMetaPrompt(): string {
-  return `You are a world-class prompt engineer. Transform the user's rough idea into a master-level AI prompt.
+  return `You are a world-class prompt architect. Your job: decode what the user actually needs (not what they said), then build a prompt that forces a 9.5/10 output every time.
 
-Detect and infer: task type, ideal expert role, implied audience, output format, tone, constraints.
+━━━ PHASE 1 — DECODE (mental only, never write this out) ━━━
+For every element of the request, ask the deeper question:
+• What outcome does this person need — not what did they ask for?
+• Who is the final reader and what would make this response useless or embarrassing to them?
+• What constraint is implied but not stated?
+• What is the single most important thing this prompt must NOT get wrong?
 
-Always include:
-1. Specific named expert role (specialty, years of experience, measurable track record)
-2. Audience with psychographic detail
-3. Step-by-step numbered task instructions (5–8 steps, each referencing the user's specific answers)
-4. Exact output format specification
-5. Quality bar — what "excellent" looks like in concrete, reader-specific terms
-6. Constraints — 5+ things NOT to do
-7. Reasoning instruction for complex tasks
+Inference rules — apply these before writing anything:
+• "my boss / client / partner" → power asymmetry exists. Political sensitivity required.
+• "quickly / ASAP / by tomorrow" → deadline pressure changes ALL tradeoffs. Speed beats perfection.
+• Any named tool or platform → must use it. Never suggest an alternative.
+• "professional / formal" → precision over warmth. Eliminate all personality inflation.
+• "simple / easy" → Feynman calibration. No jargon. Would a sharp 14-year-old follow every step?
+• Every number the user mentioned → appears verbatim. Non-negotiable.
+• If the task produces something a specific person will READ/USE → that person must appear in the prompt with their specific fear or concern, not just their job title.
 
-Rules:
-- Weave the user's EXACT WORDS from their answers into every section — no generic placeholders
+━━━ PHASE 2 — BUILD ━━━
+Write all 9 sections below, in order. Every section must be specific to THIS task — zero generic filler.
+
+<role>
+Not a job title — a PERSON. Include ALL of:
+• Named specialty tied to THIS task ("built 40+ X systems that survived Y failure condition")
+• ONE character trait that is their professional identity (something they physically cannot suppress)
+• What this expert REFUSES to do (defines their standard more precisely than what they do)
+• 2–3 real metrics: %, $, years, failure conditions survived
+</role>
+
+<context>
+SYNTHESIZE — do not echo. For each key element, state its IMPLICATION:
+• Named person → what does that relationship change about tone and risk?
+• Named deadline → what tradeoffs does that force?
+• Named tool → what hard constraints does that create?
+Final statement: who is the final reader, what do they fear, what is the real stake if this output fails?
+</context>
+
+<objective>
+ONE sentence. Rigid format:
+[action verb] + [specific output type] + [for whom with specific concern] + [to achieve what measurable result]
+✗ Wrong: "Write a good email"
+✓ Right: "Draft a 120-word meeting-request email to a skeptical VP who has rejected the last 3 vendor meetings, to secure a 30-minute slot within 48 hours"
+</objective>
+
+<pre_work>
+CRITICAL: Match the thinking protocol to the task type. Combine for hybrid tasks. Never use generic pre_work.
+
+• CODING →
+  "COVERAGE PASS (do this first): Write ALL function signatures and interfaces with no implementation. List every data flow boundary. Name the 3 most likely runtime failures and the exact line where each would occur.
+  IMPLEMENTATION PASS: Return to implement each function in the order they were declared.
+  REASON: Writing 70% of the code then running out of context is the #1 coding prompt failure mode. Coverage-first prevents it."
+
+• WRITING / COMMUNICATION →
+  "Identify the reader's actual UNSTATED question (the thing they need to understand but didn't ask). Decide what they must FEEL by the last sentence before writing the first. Draft the ending first, then build backwards.
+  REASON: Writing chronologically produces conclusions that are discovered rather than engineered."
+
+• ANALYSIS →
+  "Form 3 competing hypotheses. For each, state what evidence would DISPROVE it (not confirm it). Only then examine the data.
+  For every finding: assign confidence level — HIGH (multiple independent sources confirm), MEDIUM (one strong indicator), LOW (inference from limited data).
+  REASON: Seeking confirmation produces analysis; seeking disconfirmation produces insight."
+
+• NEGOTIATION →
+  "Model the other party's incentives, fears, and BATNA before drafting anything. Name the 2 sentences that end this conversation badly. Name the 1 sentence that, if said, makes agreement inevitable.
+  REASON: Most negotiation failures happen in the first 30 words."
+
+• STRATEGY →
+  "Find the binding constraint — the one bottleneck that, if removed, changes everything else. Sequence reversible decisions before irreversible ones. Map second-order effects of the top recommendation.
+  REASON: Treating all priorities as equal is the signature of strategy that never gets executed."
+
+• CREATIVE →
+  "Generate the 3 most obvious creative directions. Reject all of them explicitly. Ask: what would this look like if it existed nowhere else?
+  REASON: The first 3 ideas are always what the brief says, not what the problem needs."
+
+• RESEARCH →
+  "State the hypothesis the client already believes. Identify the 2 most likely confirmation biases. Define 'sufficient evidence to change the recommendation' before looking at any data.
+  REASON: Undefined success criteria produce research that confirms whatever was believed before it started."
+
+• EDUCATION →
+  "Map the learner's current mental model in 1 sentence. Identify the one misconception that, if uncorrected, makes everything else false. Build from that correction outward.
+  REASON: Teaching content without correcting the prior misconception produces a learner who can repeat words but not apply them."
+</pre_work>
+
+<task>
+6–9 numbered steps. Each step MUST:
+1. Reference a specific detail from <context> or <objective> — never a generic verb
+2. State what it builds on: "Using the [X] from step 2, now..."
+3. End with a concrete, verifiable sub-output (not a direction — a result you can hold)
+4. For code: name the exact library, pattern, and file
+Step N (always last): "Verify every criterion in <quality_standard> is met. If any criterion fails, identify which step produced the failure and fix it before delivering."
+</task>
+
+<constraints>
+8+ rules. Order by catastrophic failure risk — most damaging first.
+Format: "Do NOT [exact behavior] — [specific reason this destroys value for THIS reader in THIS context]"
+Every rule must be obviously specific to this task. Generic constraints ("be concise", "be professional") are FORBIDDEN.
+✗ Bad: "Be concise"
+✓ Good: "Do NOT exceed 150 words — the reader scans the first paragraph and decides whether to keep reading; word 151 never gets read"
+</constraints>
+
+<output_format>
+Name every section, every subsection, every length, every format. Nothing left to interpretation.
+• Writing: section names + exact word counts
+• Code: project structure + file reading order + example usage
+• Analysis: Pyramid Principle — conclusion first, evidence second, recommendation last
+• Email: subject line formula + body structure + hard word cap
+• For format-sensitive tasks (specific schema, JSON, table, template): include 1 short example showing the exact format expected
+• For reasoning-heavy tasks (strategy, analysis, negotiation): do NOT include examples — they constrain rather than guide
+</output_format>
+
+<quality_standard>
+4–6 criteria. Each must be BINARY — passes or fails, no gray area.
+Format: "[Specific person] [specific observable action without adjectives]"
+✓ Good: "A skeptical CFO reads only the executive summary and has enough information to make the go/no-go decision"
+✓ Good: "A developer copies the code into their editor, runs it once, and it executes without modification"
+✗ Bad: "The output is professional and high-quality" — not testable
+NEVER use: high quality, professional, comprehensive, thorough, excellent, well-written — these are wishes, not criteria.
+</quality_standard>
+
+<critical_reminders>
+[MEMORY ANCHOR — repeat the 3 most important constraints from this prompt here, verbatim]
+This section exists because research shows 30% accuracy loss when key constraints appear only in the middle of a prompt.
+Write the 3 most critical rules again at the end so they anchor in working memory.
+</critical_reminders>
+
+<output_primer>
+End the prompt with: "Begin your response with: [the exact first 8–12 words that signal the correct format, register, and approach]"
+Calibrate to task:
+• Email → "Begin with: 'Subject: [formula]'"
+• Analysis → "Begin with: 'Executive summary: [conclusion first]'"
+• Code → "Begin with: '// Architecture overview:'"
+• Strategy → "Begin with: 'The binding constraint is:'"
+• Negotiation → "Begin with: '[Acknowledge their position in ≤10 words]'"
+</output_primer>
+
+NON-NEGOTIABLE RULES:
+- Output ONLY the prompt — zero preamble, zero explanation, zero commentary after
 - Write addressed to the AI ("You are...", "Your task is...")
-- Output ONLY the enhanced prompt — no preamble, no explanation
-- Format using XML tags: <role>, <context>, <objective>, <task>, <constraints>, <output_format>, <quality_standard>
-- Keep each section tight: 1-4 lines max. Dense and precise.
+- Every number the user mentioned appears verbatim
+- <pre_work> ALWAYS matches the task type — never generic
+- Final audience person is named with their SPECIFIC concern or fear, not just job title
 
 Transform this into a master prompt:`;
+}
+
+/* ─── BUILD QUESTION SYSTEM PROMPT ─────────── */
+function buildQuestionSystemPrompt(raw: string, conv: Conv[], profile: Profile | null): string {
+  const convText = conv
+    .map((c, i) => `Q${i + 1}: ${c.q}\nA${i + 1}: ${c.a}`)
+    .join('\n\n');
+
+  const profileBlock = profile
+    ? `\nUSER PROFILE (already known — NEVER ask about any of this): ${profile.role} in ${profile.industry}. Tools they use: ${profile.tools}. Core goal: ${profile.goals}.\n`
+    : '';
+
+  const exchangeCount = conv.length;
+
+  return `You are a master prompt engineer running a precision requirements interview. Your single goal: identify the one missing piece of information that would most improve the final prompt — then ask only that.
+${profileBlock}
+USER'S TASK: "${raw}"
+${exchangeCount > 0 ? `\nCONVERSATION SO FAR:\n${convText}` : ''}
+
+━━━ PHASE 1 — GAP ANALYSIS (mental only, never write this out) ━━━
+Score what you know vs. what you need across these 5 dimensions:
+
+STAKES     → Do you know the real consequence if this fails? (career, revenue, deadline, relationship)
+AUDIENCE   → Do you know who the final reader is and what they fear or need?
+CONSTRAINTS→ Do you have at least one hard limit? (word count, tool, format, what must NOT appear)
+SPECIFICS  → Do you have a concrete detail that makes this unique? (name, number, example, past attempt)
+FORMAT     → Do you know the exact deliverable? (length, structure, channel, tone register)
+
+━━━ PHASE 2 — DECIDE: ask or signal READY? ━━━
+
+Respond with only the word READY if ALL of the following are true:
+  ✓ You know the real stake or consequence of failure
+  ✓ You know who the final reader/audience is
+  ✓ You have at least one hard constraint (not a preference)
+  ✓ You have at least one concrete specific (name, number, or example)
+  ✓ You know the required output format or deliverable type
+  ✓ You have completed at least 2 exchanges (current count: ${exchangeCount})
+
+If ANY criterion is missing AND exchanges so far < 3: ask exactly one more question.
+If exchanges ≥ 3: respond READY regardless — more questions create diminishing returns.
+
+━━━ PHASE 3 — IF ASKING: construct the highest-value question ━━━
+
+Pick the single most critical missing dimension from Phase 1.
+Build a question that:
+• Opens with the user's EXACT previous words: "You mentioned [word] — ..."
+• Cannot be answered yes/no — must force a specific, usable detail
+• Is under 20 words total
+• Sounds like a sharp advisor, not a survey form
+
+GOOD question patterns (learn from these, don't copy verbatim):
+• "You said [exact phrase] — who specifically reads the final output, and what would make them immediately reject it?"
+• "What does a BAD response to this look like — what specific thing would make you throw it away immediately?"  ← this is often the highest-value question
+• "What's the worst real consequence if this [exact task] fails — job risk, revenue loss, relationship damage?"
+• "You mentioned [tool/constraint] — is that a hard limit or a preference you'd override for a better result?"
+• "What's the exact format and length ceiling — and what happens if you exceed it?"
+• "What have you already tried that didn't work, and why did it fail?"
+• "Who specifically has to sign off on this, and what's their single biggest concern?"
+
+WHY "what does failure look like" is the best question:
+It surfaces the implicit quality criteria the user has but hasn't articulated. Their answer tells you exactly what constraints to build into the prompt — better than any other question.
+
+BAD questions (never ask these):
+• "What's your main goal?" — too vague, ignores what they already told you
+• "Can you tell me more?" — directionless, wastes an exchange
+• "What tone do you prefer?" — ask about the AUDIENCE's reaction, not abstract tone preference
+• Any question the conversation has already answered
+• Any question the user profile already answers
+• Any yes/no question — forces a specific, usable answer instead
+
+Output ONLY: the single question (no preamble, no numbering, under 20 words) OR the single word READY.`;
+}
+
+/* ─── AUTO-CRITIQUE PROMPT ─────────────────── */
+function buildCritiquePrompt(type: string): string {
+  return `You are a ruthless prompt quality auditor. You have one job: find the weakest sections of this AI prompt and fix them.
+
+Evaluate against these 7 criteria — assign PASS or FAIL to each:
+
+1. SPECIFICITY
+   FAIL if any section uses vague adjectives: "good", "professional", "high-quality", "comprehensive", "thorough", "appropriate", "excellent", "well-written". These words are invisible to an AI.
+   PASS if every instruction specifies exact behavior, length, format, or observable outcome.
+
+2. OUTPUT_PRIMER
+   FAIL if the prompt does NOT end with the first exact words the AI should say.
+   PASS if the prompt ends with: 'Begin your response with: "[first 8-12 words calibrated to this task type: ${type}]"'
+
+3. CONSTRAINT_DEPTH
+   FAIL if any constraint does not explain WHY it exists for this specific task.
+   "Be concise" = FAIL. "Do not exceed 150 words — the reader stops reading at paragraph 3" = PASS.
+
+4. AUDIENCE_PRECISION
+   FAIL if the final reader is described only by job title without a specific fear, goal, or concern.
+   "A busy VP" = FAIL. "A VP who rejected the last 3 proposals because they lacked ROI specifics" = PASS.
+
+5. MEASURABLE_QUALITY
+   FAIL if any quality criterion uses adjectives instead of observable actions.
+   "The response is professional" = FAIL. "A first-time reader completes the task without asking a follow-up question" = PASS.
+
+6. MEMORY_ANCHOR
+   FAIL if the 3 most critical constraints do NOT appear at both the START and END of the prompt.
+   Key instructions buried only in the middle lose 30% of their effectiveness.
+   PASS if the critical constraints are restated in a final section at the end.
+
+7. PRE_WORK_MATCH
+   FAIL if the <pre_work> section is generic ("identify dependencies", "map the task").
+   PASS if the <pre_work> section uses the task-specific thinking protocol for: ${type}.
+   For CODING: coverage pass (signatures first) then implementation pass.
+   For ANALYSIS: 3 competing hypotheses + confidence levels (HIGH/MEDIUM/LOW) on every finding.
+   For WRITING: reader's unstated question + draft the ending first.
+   For NEGOTIATION: model BATNA + name 2 sentences that end this badly.
+
+For EVERY criterion marked FAIL:
+— Quote the specific section that fails (in quotes)
+— Write the complete replacement text
+
+Then output the COMPLETE revised prompt with every fix applied — all sections included, nothing removed.
+Output ONLY the revised prompt. No audit report. No preamble. No commentary after. Just the prompt.`;
+}
+
+/* ─── MODEL-AWARE META PROMPT ───────────────── */
+function buildMetaPromptForModel(model: TargetModel, profile: Profile | null): string {
+  let base = buildMetaPrompt();
+
+  if (profile) {
+    const profileContext = `\nUSER CONTEXT: ${profile.role} in ${profile.industry}. Tools they use: ${profile.tools}. Their core goal: ${profile.goals}. Tailor every section to this context.\n`;
+    base = base.replace('Transform this into a master prompt:', profileContext + '\nTransform this into a master prompt:');
+  }
+
+  if (model === 'gpt4') {
+    base += '\n\nFORMAT FOR GPT-4o: Use markdown headers (## Role, ## Context, etc.) instead of XML tags. Add a [SYSTEM] block at the top. Use numbered lists.';
+  } else if (model === 'gemini') {
+    base += '\n\nFORMAT FOR GEMINI: Use conversational framing (\'You are an expert in X...\'). Use bullet points. Add \'Think step by step before responding.\' at the end.';
+  }
+
+  return base;
 }
 
 function getRole(type: string): string {
@@ -297,40 +582,43 @@ function getQuality(type: string): string {
   return q[type] || 'Precise, structured, every sentence earning its place.';
 }
 
-function buildOfflinePrompt(raw: string, answers: Record<string,string>, type: string): string {
-  const a = answers;
-  const use = (v: string|undefined, fb: string) => v?.trim() ? v.trim() : fb;
+function buildOfflinePrompt(raw: string, conv: Conv[], type: string): string {
   const role = getRole(type);
-
-  const taskMap: Record<string, string> = {
-    negotiation: `1. Subject: "Quick chat about my comp?" — not "Salary Discussion."\n  2. Open with: "${use(a.q0,'[your achievement]')}" — state it as fact.\n  3. The ask: ${use(a.q1,'[your target]')}. A number, not a range.\n  4. CTA: "15 minutes this week?" — then stop.\n  5. Under 150 words.`,
-    communication: `1. Lead with: "${use(a.q0,'[core message]')}" — by paragraph 2 at the latest.\n  2. Recipient: ${use(a.q1,'[recipient]')} — calibrate every word.\n  3. Use SBI: Situation, Behaviour, Impact.\n  4. Close with one concrete next step.`,
-    marketing: `1. Target: ${use(a.q0,'[your target]')} — every word for this person.\n  2. Hook: earn the next sentence in the first 8 words.\n  3. One CTA: ${use(a.q1,'[desired action]')}.\n  4. Write 3 subject line variants. Label each formula.`,
-    analysis: `1. Audience: ${use(a.q0,'[audience and decision]')} — lead with what they need to decide.\n  2. State your conclusion first (Pyramid Principle).\n  3. End with 3–5 prioritised recommendations.`,
-    strategy: `1. Goal: ${use(a.q0,'[specific goal]')} — diagnose the actual situation.\n  2. Binding constraint: ${use(a.q1,'[obstacle]')} — fix this first.\n  3. 30/60/90 day plan with owners and success metrics.`,
-    coding: `1. Language: ${use(a.q0,'[language]')} — use its conventions throughout.\n  2. Hard part: ${use(a.q1,'[hard part]')} — address this first.\n  3. Error handling at every boundary. Usage example required.`,
-    writing: `1. Reader: ${use(a.q0,'[reader description]')} — every decision for them.\n  2. Goal: ${use(a.q1,'[reader outcome]')} — reader feels this by the last line.\n  3. Opening: earn the next minute in the first sentence. Write it last.`,
-    creative: `1. Audience: ${use(a.q0,'[audience]')} — what do they fear or desire?\n  2. Direction: ${use(a.q1,'[direction]')} — every idea filtered through this.\n  3. Apply the First Idea Veto: generate the obvious, discard it.`,
-    education: `1. Learner: ${use(a.q0,'[learner background]')} — calibrate every analogy.\n  2. Lead with the single keystone concept.\n  3. Address 3 misconceptions before the learner hits them.`,
-    research: `1. Decision: ${use(a.q0,'[decision]')} — every finding evaluated against this.\n  2. Format: ${use(a.q1,'[format]')} — structure determines usability.\n  3. Distinguish fact / inference / recommendation.`,
-    email: `1. Recipient: ${use(a.q0,'[recipient]')} — calibrate tone and context entirely.\n  2. One ask: ${use(a.q1,'[ask]')} — state it in the first 3 sentences.\n  3. Under 100 words. Subject line must earn the open.`,
-  };
-
-  const task = taskMap[type] || taskMap.writing;
-  const filled = Object.values(a).filter(v => v?.trim());
+  const contextLines = conv.map(c => `  — ${c.a}`);
 
   return [
     '<role>',`  ${role}`,'</role>','',
     '<context>',
     `  Task: "${raw}"`,
-    ...filled.map(v => `  — ${v}`),
+    ...contextLines,
     '</context>','',
     '<objective>',`  ${getObjective(type, raw)}`,'</objective>','',
-    '<task>',`  ${task}`,'</task>','',
+    '<task>',
+    '  1. Address the task directly and completely.',
+    '  2. Apply your expert role throughout every sentence.',
+    '  3. Reference the specific context provided above.',
+    '  4. Prioritize precision and actionability over comprehensiveness.',
+    '  5. Every paragraph must earn its place.',
+    '</task>','',
     '<constraints>',`  ${getConstraints(type)}`,'</constraints>','',
     '<output_format>',`  ${getFormat(type)}`,'</output_format>','',
     '<quality_standard>',`  ${getQuality(type)}`,'</quality_standard>',
   ].join('\n');
+}
+
+/* ─── BUILD USER CONTENT ────────────────────── */
+function buildUserContentDynamic(raw: string, conv: Conv[], pasteCtx = ''): string {
+  let content = raw;
+  if (conv.length > 0) {
+    content += '\n\nContext from our conversation:\n';
+    conv.forEach(({ q, a }) => {
+      content += `\nQ: ${q}\nA: ${a}`;
+    });
+  }
+  if (pasteCtx.trim()) {
+    content += `\n\nReference material provided:\n${pasteCtx.trim()}`;
+  }
+  return content;
 }
 
 /* ─── STREAMING FETCH ───────────────────────── */
@@ -370,17 +658,10 @@ async function streamFetch(
   return full;
 }
 
-function buildUserContent(raw: string, answers: Record<string,string>): string {
-  let content = raw;
-  const filled = Object.entries(answers).filter(([, v]) => v?.trim());
-  if (filled.length > 0) {
-    content += '\n\nContext from my answers:\n' + filled.map(([, v]) => `- ${v}`).join('\n');
-  }
-  return content;
-}
-
 /* ─── HISTORY ───────────────────────────────── */
-const HIST_KEY = 'gm_hist_v3';
+const HIST_KEY    = 'gm_hist_v3';
+const PROFILE_KEY = 'gm_profile_v1';
+
 function loadHistory(): Saved[] {
   try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch { return []; }
 }
@@ -389,6 +670,15 @@ function saveToHistory(item: Saved) {
     const h = loadHistory().filter(x => x.id !== item.id);
     localStorage.setItem(HIST_KEY, JSON.stringify([item, ...h].slice(0, 8)));
   } catch {}
+}
+function loadProfile(): Profile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveProfile(p: Profile) {
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch {}
 }
 
 /* ─── COMPONENT ─────────────────────────────── */
@@ -399,36 +689,78 @@ export default function GoatmodePage() {
   const [screen, setScreen]           = useState<Screen>('input');
   const [rawInput, setRawInput]       = useState('');
   const [inputMode, setInputMode]     = useState<InputMode>('build');
-  /* Chat */
+
+  /* Chat — dynamic conversation */
   const [bubbles, setBubbles]         = useState<Bub[]>([]);
-  const [qIdx, setQIdx]               = useState(0);
-  const [answers, setAnswers]         = useState<Record<string,string>>({});
+  const [conversation, setConversation] = useState<Conv[]>([]);
+  const [currentDynamicQ, setCurrentDynamicQ] = useState('');
+  const [qCount, setQCount]           = useState(0);
   const [chatInput, setChatInput]     = useState('');
   const [isGMTyping, setIsGMTyping]   = useState(false);
   const [currentType, setType]        = useState('writing');
-  const [questions, setQs]            = useState<Q[]>([]);
+
+  /* Paste context panel */
+  const [pasteCtx, setPasteCtx]       = useState('');
+  const [showPaste, setShowPaste]     = useState(false);
+
   /* Output */
   const [prompt, setPrompt]           = useState('');
   const [displayed, setDisplayed]     = useState('');
   const [streamDone, setStreamDone]   = useState(false);
   const [promptScore, setPromptScore] = useState(0);
+
   /* Thinking */
   const [thinking, setThinking]       = useState(0);
+  const [isCritiquing, setIsCritiquing] = useState(false);
+
   /* History */
   const [history, setHistory]         = useState<Saved[]>([]);
+
   /* Refine */
   const [refineVal, setRefineVal]     = useState('');
   const [refining, setRefining]       = useState(false);
+
   /* UI */
   const [copied, setCopied]           = useState(false);
   const [booted, setBooted]           = useState(false);
 
+  /* ── PERSONALIZATION ── */
+  const [profile, setProfile]         = useState<Profile | null>(null);
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
+  const [profileForm, setProfileForm] = useState<Profile>({ role: '', industry: '', tools: '', goals: '' });
+  const profileRef = useRef<Profile | null>(null);
+
+  /* ── MODEL SELECTOR ── */
+  const [targetModel, setTargetModel] = useState<TargetModel>('claude');
+  const targetModelRef = useRef<TargetModel>('claude');
+
+  /* ── PROMPT VARIANTS ── */
+  const [variantA, setVariantA]             = useState('');
+  const [variantB, setVariantB]             = useState('');
+  const [activeVariant, setActiveVariant]   = useState<ActiveVariant>('orig');
+  const [generatingVariants, setGeneratingVariants] = useState(false);
+
+  /* ── LIVE PREVIEW ── */
+  const [previewText, setPreviewText]       = useState('');
+  const [showPreview, setShowPreviewState]  = useState(false);
+  const [previewStreaming, setPreviewStreaming] = useState(false);
+
+  /* Refs */
   const chatEndRef   = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const pasteCtxRef  = useRef('');
 
+  /* Keep refs in sync */
+  useEffect(() => { pasteCtxRef.current = pasteCtx; }, [pasteCtx]);
+  useEffect(() => { profileRef.current = profile; }, [profile]);
+  useEffect(() => { targetModelRef.current = targetModel; }, [targetModel]);
+
+  /* Mount */
   useEffect(() => {
     setHistory(loadHistory());
+    const saved = loadProfile();
+    if (saved) { setProfile(saved); profileRef.current = saved; }
     const t = setTimeout(() => setBooted(true), 2700);
     return () => clearTimeout(t);
   }, []);
@@ -442,24 +774,22 @@ export default function GoatmodePage() {
 
   useEffect(() => {
     if (screen !== 'thinking') return;
-    const iv = setInterval(() => setThinking(n => (n + 1) % THINKING_LINES.length), 900);
+    const lines = isCritiquing ? CRITIQUE_LINES : THINKING_LINES;
+    const iv = setInterval(() => setThinking(n => (n + 1) % lines.length), 850);
     return () => clearInterval(iv);
-  }, [screen]);
+  }, [screen, isCritiquing]);
+
+  /* ── DERIVED ── */
+  const getActiveText = useCallback(() => {
+    if (activeVariant === 'a' && variantA) return variantA;
+    if (activeVariant === 'b' && variantB) return variantB;
+    return prompt;
+  }, [activeVariant, variantA, variantB, prompt]);
 
   /* ── CHAT HELPERS ── */
-  const addBub = useCallback((role: BubRole, text: string, opts?: string[]) => {
-    setBubbles(prev => [...prev, { id: ++bubId, role, text, opts }]);
+  const addBub = useCallback((role: BubRole, text: string) => {
+    setBubbles(prev => [...prev, { id: ++bubId, role, text }]);
   }, []);
-
-  /* Show typing indicator, then deliver bubble */
-  const askQuestion = useCallback((qs: Q[], idx: number) => {
-    if (idx >= qs.length) return;
-    setIsGMTyping(true);
-    setTimeout(() => {
-      setIsGMTyping(false);
-      addBub('ai', qs[idx].text, qs[idx].opts);
-    }, 650 + Math.random() * 350);
-  }, [addBub]);
 
   /* ── SHARED OUTPUT FINALISER ── */
   const finaliseOutput = useCallback((p: string, type: string, raw: string) => {
@@ -473,31 +803,156 @@ export default function GoatmodePage() {
     setHistory(loadHistory());
   }, []);
 
-  /* ── RUN THE PROMPT ENGINE ── */
-  const runEngine = useCallback(async (raw: string, ans: Record<string,string>, type: string, sysPrompt: string) => {
+  /* ── RUN THE PROMPT ENGINE (TWO-PASS: build → critique → refine) ── */
+  const runEngine = useCallback(async (
+    userContent: string,
+    type: string,
+    raw: string,
+    sysPrompt: string,
+    conv: Conv[] = []
+  ) => {
     setScreen('thinking');
     setThinking(0);
+    setIsCritiquing(false);
     setStreamDone(false);
     setDisplayed('');
+    setVariantA('');
+    setVariantB('');
+    setActiveVariant('orig');
+    setPreviewText('');
+    setShowPreviewState(false);
 
-    let outputStarted = false;
-    let lastFull = '';
+    let draftFull = '';
 
     try {
-      const userContent = buildUserContent(raw, ans);
-      const p = await streamFetch(userContent, sysPrompt, (full) => {
-        lastFull = full;
-        if (!outputStarted) { outputStarted = true; setScreen('output'); }
-        setDisplayed(full);
-        setPrompt(full);
+      // ── PASS 1: Generate draft silently (stay on thinking screen) ──
+      const draft = await streamFetch(userContent, sysPrompt, (full) => {
+        draftFull = full;
+        // Silent — no UI update. User sees THINKING_LINES the whole time.
       });
-      finaliseOutput(p || lastFull, type, raw);
+      const draftText = draft || draftFull;
+      if (!draftText || draftText.length < 80) throw new Error('Draft too short');
+
+      // ── PASS 2: Auto-critique streams the refined prompt to output screen ──
+      setIsCritiquing(true);
+      setThinking(0);
+
+      let critiqueStarted = false;
+      let critiqueFull = '';
+
+      try {
+        const refined = await streamFetch(
+          `Evaluate and improve this prompt:\n\n${draftText}`,
+          buildCritiquePrompt(type),
+          (full) => {
+            critiqueFull = full;
+            if (!critiqueStarted) {
+              critiqueStarted = true;
+              setScreen('output'); // Switch to output when first critique token arrives
+            }
+            setDisplayed(full);
+            setPrompt(full);
+          }
+        );
+
+        const finalText = refined || critiqueFull;
+        // Use critique result only if substantial (at least 40% of draft length)
+        const best = (finalText && finalText.length > draftText.length * 0.4) ? finalText : draftText;
+        setIsCritiquing(false);
+        finaliseOutput(best, type, raw);
+
+      } catch {
+        // Critique failed — show draft directly
+        setIsCritiquing(false);
+        finaliseOutput(draftText, type, raw);
+      }
+
     } catch {
-      /* Offline fallback */
-      const fb = buildOfflinePrompt(raw, ans, type);
+      setIsCritiquing(false);
+      const fb = buildOfflinePrompt(raw, conv, type);
       finaliseOutput(fb, type, raw);
     }
   }, [finaliseOutput]);
+
+  /* ── GENERATE NEXT DYNAMIC QUESTION (STREAMING) ── */
+  const generateNextQuestion = useCallback(async (
+    raw: string,
+    conv: Conv[],
+    type: string
+  ) => {
+    setIsGMTyping(true);
+
+    /* Hard cap: after 3 questions, build immediately */
+    if (conv.length >= 3) {
+      setIsGMTyping(false);
+      addBub('ai', 'Got everything I need. Building your prompt now...');
+      setTimeout(() => {
+        const uc = buildUserContentDynamic(raw, conv, pasteCtxRef.current);
+        runEngine(uc, type, raw, buildMetaPromptForModel(targetModelRef.current, profileRef.current), conv);
+      }, 380);
+      return;
+    }
+
+    const systemPrompt = buildQuestionSystemPrompt(raw, conv, profileRef.current);
+
+    /* Streaming question approach */
+    let streamBubId = -1;
+    let bubCreated  = false;
+
+    try {
+      const finalText = await streamFetch(
+        'Generate the next question.',
+        systemPrompt,
+        (full) => {
+          if (!bubCreated) {
+            /* First token: turn off typing indicator, create bubble */
+            setIsGMTyping(false);
+            bubCreated = true;
+            const newId = ++bubId;
+            streamBubId = newId;
+            setBubbles(prev => [...prev, { id: newId, role: 'ai' as BubRole, text: full }]);
+          } else {
+            /* Subsequent tokens: update that bubble */
+            setBubbles(prev => prev.map(b =>
+              b.id === streamBubId ? { ...b, text: full } : b
+            ));
+          }
+        }
+      );
+
+      const response = (finalText || '').trim();
+
+      if (!response || /^READY$/i.test(response) || response.toUpperCase().startsWith('READY')) {
+        /* Remove the streaming bubble and replace with "building" message */
+        if (bubCreated) {
+          setBubbles(prev => prev.filter(b => b.id !== streamBubId));
+        }
+        setIsGMTyping(false);
+        addBub('ai', 'Perfect — I have everything I need. Engineering your prompt now...');
+        setTimeout(() => {
+          const uc = buildUserContentDynamic(raw, conv, pasteCtxRef.current);
+          runEngine(uc, type, raw, buildMetaPromptForModel(targetModelRef.current, profileRef.current), conv);
+        }, 380);
+      } else {
+        setIsGMTyping(false);
+        setCurrentDynamicQ(response);
+        setQCount(c => c + 1);
+        /* Bubble already in the list from streaming, no addBub needed */
+      }
+    } catch {
+      setIsGMTyping(false);
+      const words = raw.split(' ').slice(0, 5).join(' ');
+      const fallbacks = [
+        `Who specifically needs to act on this — and what do they care most about?`,
+        `You mentioned "${words}" — what does success look like in concrete terms?`,
+        `What's the single biggest constraint I should know before building this?`,
+      ];
+      const fb = fallbacks[conv.length % fallbacks.length];
+      setCurrentDynamicQ(fb);
+      setQCount(c => c + 1);
+      addBub('ai', fb);
+    }
+  }, [addBub, runEngine]);
 
   /* ── START FLOW ── */
   const handleStart = useCallback(async () => {
@@ -507,15 +962,16 @@ export default function GoatmodePage() {
     setType(type);
 
     if (inputMode === 'improve') {
-      await runEngine(raw, {}, type, buildImprovePrompt());
+      await runEngine(raw, type, raw, buildImprovePrompt());
       return;
     }
 
-    // Build mode — start conversation
-    const qs = QUESTIONS[type] || QUESTIONS.writing;
-    setQs(qs);
-    setAnswers({});
-    setQIdx(0);
+    /* Build mode — start dynamic conversation */
+    setConversation([]);
+    setCurrentDynamicQ('');
+    setQCount(0);
+    setPasteCtx('');
+    setShowPaste(false);
     setBubbles([]);
     setStreamDone(false);
     setScreen('chat');
@@ -524,56 +980,59 @@ export default function GoatmodePage() {
       setIsGMTyping(true);
       setTimeout(() => {
         setIsGMTyping(false);
-        addBub('ai', 'Got it. A few quick questions to make this exactly right.');
-        askQuestion(qs, 0);
+        addBub('ai', 'On it. Let me ask you a few sharp questions to build this right.');
+        setTimeout(() => generateNextQuestion(raw, [], type), 600);
       }, 720);
     }, 280);
-  }, [rawInput, inputMode, addBub, askQuestion, runEngine]);
+  }, [rawInput, inputMode, addBub, generateNextQuestion, runEngine]);
 
-  /* ── ANSWER QUESTION ── */
+  /* ── ANSWER QUESTION (with vague-answer detection) ── */
   const handleAnswer = useCallback(async (answer: string) => {
     if (!answer.trim()) return;
-    addBub('user', answer);
     setChatInput('');
-    const newAnswers = { ...answers, [questions[qIdx].id]: answer };
-    setAnswers(newAnswers);
-    const next = qIdx + 1;
 
-    if (next < questions.length) {
-      setQIdx(next);
-      askQuestion(questions, next);
-    } else {
-      setIsGMTyping(true);
+    /* Check if answer is vague */
+    const trimmed = answer.trim();
+    const isVague =
+      trimmed.split(/\s+/).length < 3 ||
+      /^(idk|i don't know|not sure|unsure|no idea|whatever|n\/a|na|yes|no|ok|okay|sure|maybe|-)$/i.test(trimmed);
+
+    addBub('user', answer);
+
+    if (isVague) {
       setTimeout(() => {
-        setIsGMTyping(false);
-        addBub('ai', 'Perfect. Engineering your prompt now...');
-        setTimeout(async () => {
-          await runEngine(rawInput, newAnswers, currentType, buildMetaPrompt());
-        }, 380);
-      }, 480);
+        addBub('ai', "That's a bit thin — one specific detail here (a number, name, or example) will make the final prompt much stronger.");
+      }, 400);
+      return; /* Do NOT advance conversation */
     }
-  }, [answers, questions, qIdx, rawInput, currentType, addBub, askQuestion, runEngine]);
+
+    const newConv: Conv[] = [...conversation, { q: currentDynamicQ, a: answer }];
+    setConversation(newConv);
+
+    await generateNextQuestion(rawInput, newConv, currentType);
+  }, [conversation, currentDynamicQ, rawInput, currentType, addBub, generateNextQuestion]);
 
   /* ── SKIP ── */
   const handleSkip = useCallback(async () => {
-    await runEngine(rawInput, answers, currentType, buildMetaPrompt());
-  }, [rawInput, answers, currentType, runEngine]);
+    const uc = buildUserContentDynamic(rawInput, conversation, pasteCtxRef.current);
+    await runEngine(uc, currentType, rawInput, buildMetaPromptForModel(targetModelRef.current, profileRef.current), conversation);
+  }, [rawInput, conversation, currentType, runEngine]);
 
   /* ── OUTPUT ACTIONS ── */
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(prompt).then(() => {
+    navigator.clipboard.writeText(getActiveText()).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     });
-  }, [prompt]);
+  }, [getActiveText]);
 
-  const openInClaude   = useCallback(() => {
-    navigator.clipboard.writeText(prompt).then(() => window.open('https://claude.ai/new', '_blank'));
-  }, [prompt]);
+  const openInClaude = useCallback(() => {
+    navigator.clipboard.writeText(getActiveText()).then(() => window.open('https://claude.ai/new', '_blank'));
+  }, [getActiveText]);
 
-  const openInChatGPT  = useCallback(() => {
-    navigator.clipboard.writeText(prompt).then(() => window.open('https://chatgpt.com/', '_blank'));
-  }, [prompt]);
+  const openInChatGPT = useCallback(() => {
+    navigator.clipboard.writeText(getActiveText()).then(() => window.open('https://chatgpt.com/', '_blank'));
+  }, [getActiveText]);
 
   const handleRefine = useCallback(async (instruction: string) => {
     if (!instruction.trim() || refining) return;
@@ -585,13 +1044,16 @@ export default function GoatmodePage() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          userContent: `Refine this prompt per the instruction: "${instruction}"\n\nOriginal:\n${prompt}`,
+          userContent: `Refine this prompt per the instruction: "${instruction}"\n\nOriginal:\n${getActiveText()}`,
           systemPrompt: 'You are a prompt engineer. Apply the instruction to refine the prompt. Keep the XML structure. Output ONLY the refined prompt — no explanation.',
         }),
       });
       const data = await res.json();
       if (data.text) {
         setPrompt(data.text);
+        setVariantA('');
+        setVariantB('');
+        setActiveVariant('orig');
         setDisplayed('');
         setPromptScore(calcScore(data.text));
         let i = 0;
@@ -606,31 +1068,137 @@ export default function GoatmodePage() {
       }
     } catch { setStreamDone(true); }
     setRefining(false);
-  }, [prompt, refining]);
+  }, [getActiveText, refining]);
 
+  /* ── GENERATE VARIANTS ── */
+  const generateVariants = useCallback(async () => {
+    if (generatingVariants) return;
+    setGeneratingVariants(true);
+    setActiveVariant('orig');
+
+    const baseMetaPrompt = buildMetaPromptForModel(targetModelRef.current, profileRef.current);
+    const userContent    = buildUserContentDynamic(rawInput, conversation, pasteCtxRef.current);
+
+    const sysA = baseMetaPrompt + '\n\nVARIANT INSTRUCTION: Make this MORE comprehensive. Add more specific steps, explicit examples, and deeper constraints. Push specificity further.';
+    const sysB = baseMetaPrompt + '\n\nVARIANT INSTRUCTION: Make this TIGHTER. Cut 30% of words. Every sentence earns its place. Zero redundancy. Maximum precision.';
+
+    try {
+      const [resA, resB] = await Promise.all([
+        fetch('/api/transform', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ userContent, systemPrompt: sysA }),
+        }),
+        fetch('/api/transform', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ userContent, systemPrompt: sysB }),
+        }),
+      ]);
+
+      const [dataA, dataB] = await Promise.all([resA.json(), resB.json()]);
+      if (dataA.text) setVariantA(dataA.text);
+      if (dataB.text) setVariantB(dataB.text);
+    } catch { /* silently fail */ }
+
+    setGeneratingVariants(false);
+  }, [rawInput, conversation, generatingVariants]);
+
+  /* ── SWITCH MODEL ── */
+  const handleModelSwitch = useCallback(async (model: TargetModel) => {
+    if (model === targetModel) return;
+    setTargetModel(model);
+    targetModelRef.current = model;
+    /* Reset variants */
+    setVariantA('');
+    setVariantB('');
+    setActiveVariant('orig');
+    setPreviewText('');
+    setShowPreviewState(false);
+    /* Re-generate with new model system prompt */
+    const uc = buildUserContentDynamic(rawInput, conversation, pasteCtxRef.current);
+    await runEngine(uc, currentType, rawInput, buildMetaPromptForModel(model, profileRef.current), conversation);
+  }, [targetModel, rawInput, conversation, currentType, runEngine]);
+
+  /* ── LIVE PREVIEW ── */
+  const runPreview = useCallback(async () => {
+    if (previewStreaming) return;
+    setShowPreviewState(true);
+    setPreviewText('');
+    setPreviewStreaming(true);
+
+    const activePromptText = getActiveText();
+
+    try {
+      await streamFetch(
+        'Give a concise 150-200 word demonstration showing how you would START this task. Show your thinking approach, not a full output.',
+        activePromptText,
+        (full) => { setPreviewText(full); }
+      );
+    } catch {
+      setPreviewText('Preview failed — check your connection and try again.');
+    }
+
+    setPreviewStreaming(false);
+  }, [getActiveText, previewStreaming]);
+
+  /* ── GO HOME ── */
   const goHome = useCallback(() => {
     setScreen('input');
     setRawInput('');
     setBubbles([]);
-    setAnswers({});
-    setQIdx(0);
+    setConversation([]);
+    setCurrentDynamicQ('');
+    setQCount(0);
+    setPasteCtx('');
+    setShowPaste(false);
     setPrompt('');
     setDisplayed('');
     setStreamDone(false);
     setIsGMTyping(false);
     setInputMode('build');
+    /* Reset variants */
+    setVariantA('');
+    setVariantB('');
+    setActiveVariant('orig');
+    /* Reset preview */
+    setPreviewText('');
+    setShowPreviewState(false);
+    setPreviewStreaming(false);
+    /* Reset model */
+    setTargetModel('claude');
+    targetModelRef.current = 'claude';
   }, []);
 
+  /* ── PROFILE HANDLERS ── */
+  const handleProfileSave = useCallback(() => {
+    const trimmed: Profile = {
+      role: profileForm.role.trim(),
+      industry: profileForm.industry.trim(),
+      tools: profileForm.tools.trim(),
+      goals: profileForm.goals.trim(),
+    };
+    if (!trimmed.role && !trimmed.industry) return;
+    setProfile(trimmed);
+    profileRef.current = trimmed;
+    saveProfile(trimmed);
+    setShowProfileSetup(false);
+  }, [profileForm]);
+
+  const handleProfileEdit = useCallback(() => {
+    if (profile) setProfileForm({ ...profile });
+    setShowProfileSetup(true);
+  }, [profile]);
+
   /* ── DERIVED ── */
-  const currentQ  = questions[qIdx];
-  const isOptQ    = currentQ?.type === 'opts';
-  const liveType  = rawInput.length > 8 ? detectType(rawInput) : null;
+  const liveType   = rawInput.length > 8 ? detectType(rawInput) : null;
   const techniques = TECHNIQUES[currentType] || TECHNIQUES.writing;
-  const wordCount  = displayed.trim() ? displayed.trim().split(/\s+/).length : 0;
+  const activeText = getActiveText();
+  const wordCount  = activeText.trim() ? activeText.trim().split(/\s+/).length : 0;
 
   /* ─── JSX ─────────────────────────────────── */
   const GoatLogo = ({ w = 52, h = 60 }: { w?: number; h?: number }) => (
-    <svg width={w} height={h} viewBox="0 0 100 115" fill="white">
+    <svg width={w} height={h} viewBox="0 0 100 115" fill="currentColor">
       <path d="M50 4 C51 12 51.8 26 52 42 C52.2 58 51.8 76 51.2 90 C50.8 102 50 113 50 114 C49.2 102 49 90 48.8 76 C48.2 58 47.8 42 48 26 C48.2 12 49 4 50 4Z"/>
       <path d="M45 12 C28 7, 7 20, 5 40 C3 56, 10 70, 22 76 L30 70 C20 64, 14 52, 15 38 C16 24, 28 15, 45 12Z"/>
       <path d="M55 12 C72 7, 93 20, 95 40 C97 56, 90 70, 78 76 L70 70 C80 64, 86 52, 85 38 C84 24, 72 15, 55 12Z"/>
@@ -659,6 +1227,70 @@ export default function GoatmodePage() {
         {/* ════════════ INPUT SCREEN ════════════ */}
         {screen === 'input' && (
           <div className="gm-screen gm-input">
+
+            {/* ── Profile Banner / Setup ── */}
+            {!profile && !showProfileSetup && (
+              <div className="gm-profile-banner">
+                <span className="gm-profile-banner__label">
+                  Personalize GoatMode — tell me once, get better prompts every time
+                </span>
+                <button
+                  className="gm-profile-banner__btn"
+                  onClick={() => { setProfileForm({ role: '', industry: '', tools: '', goals: '' }); setShowProfileSetup(true); }}
+                >
+                  Set up
+                </button>
+              </div>
+            )}
+
+            {profile && !showProfileSetup && (
+              <div className="gm-profile-badge" onClick={handleProfileEdit}>
+                <span>👤 {profile.role} · {profile.industry}</span>
+                <span className="gm-profile-badge__edit">edit</span>
+              </div>
+            )}
+
+            {showProfileSetup && (
+              <div className="gm-profile-form">
+                <div className="gm-profile-form__title">Personalize GoatMode</div>
+                <div className="gm-profile-field">
+                  <label>Your role</label>
+                  <input
+                    placeholder="e.g. Product Manager, Founder, Engineer"
+                    value={profileForm.role}
+                    onChange={e => setProfileForm(f => ({ ...f, role: e.target.value }))}
+                  />
+                </div>
+                <div className="gm-profile-field">
+                  <label>Industry</label>
+                  <input
+                    placeholder="e.g. SaaS, Healthcare, E-commerce"
+                    value={profileForm.industry}
+                    onChange={e => setProfileForm(f => ({ ...f, industry: e.target.value }))}
+                  />
+                </div>
+                <div className="gm-profile-field">
+                  <label>Tools you use</label>
+                  <input
+                    placeholder="e.g. Notion, Slack, Figma, Python"
+                    value={profileForm.tools}
+                    onChange={e => setProfileForm(f => ({ ...f, tools: e.target.value }))}
+                  />
+                </div>
+                <div className="gm-profile-field">
+                  <label>Core goal</label>
+                  <input
+                    placeholder="e.g. Launch a product, grow a team, close more deals"
+                    value={profileForm.goals}
+                    onChange={e => setProfileForm(f => ({ ...f, goals: e.target.value }))}
+                  />
+                </div>
+                <div className="gm-profile-form__actions">
+                  <button className="gm-profile-form__save" onClick={handleProfileSave}>Save</button>
+                  <button className="gm-profile-form__dismiss" onClick={() => setShowProfileSetup(false)}>Dismiss</button>
+                </div>
+              </div>
+            )}
 
             <div className="gm-input__hero">
               <div className="gm-input__logo-wrap">
@@ -758,6 +1390,8 @@ export default function GoatmodePage() {
                         setPrompt(h.prompt); setDisplayed(h.prompt);
                         setRawInput(h.raw); setType(h.type);
                         setStreamDone(true); setPromptScore(calcScore(h.prompt));
+                        setVariantA(''); setVariantB(''); setActiveVariant('orig');
+                        setPreviewText(''); setShowPreviewState(false);
                         setScreen('output');
                       }}>
                       <span className="gm-history__pill-type">{TYPE_LABELS[h.type] ?? h.type}</span>
@@ -781,29 +1415,48 @@ export default function GoatmodePage() {
                 <div className="gm-chat__origin">
                   {rawInput.length > 38 ? rawInput.slice(0, 38) + '…' : rawInput}
                 </div>
-                {questions.length > 0 && (
-                  <div className="gm-chat__progress">
-                    Q {Math.min(qIdx + 1, questions.length)} OF {questions.length}
+                {qCount > 0 && (
+                  <div className="gm-chat__progress">Q {qCount}</div>
+                )}
+              </div>
+              <div className="gm-chat__topbar-actions">
+                <button
+                  className={`gm-paste-btn ${showPaste ? 'gm-paste-btn--active' : ''}`}
+                  onClick={() => setShowPaste(v => !v)}
+                  title="Paste reference material, URLs, or extra context"
+                >
+                  📎 context
+                </button>
+                <button className="gm-skip" onClick={handleSkip}>skip → build</button>
+              </div>
+            </div>
+
+            {/* Paste context panel */}
+            {showPaste && (
+              <div className="gm-paste-panel">
+                <div className="gm-paste-panel__label">
+                  Paste reference material, a URL, example text, or any extra context you want included in your prompt:
+                </div>
+                <textarea
+                  className="gm-paste-panel__textarea"
+                  placeholder="Paste anything here — URLs, examples, competitor copy, data, background info..."
+                  value={pasteCtx}
+                  onChange={e => setPasteCtx(e.target.value)}
+                  rows={4}
+                />
+                {pasteCtx.trim() && (
+                  <div className="gm-paste-panel__done">
+                    ✓ Context added — it will be woven into your prompt
                   </div>
                 )}
               </div>
-              <button className="gm-skip" onClick={handleSkip}>skip → build</button>
-            </div>
+            )}
 
             <div className="gm-chat__messages">
               {bubbles.map(b => (
                 <div key={b.id} className={`gm-bub gm-bub--${b.role}`}>
                   {b.role === 'ai' && <div className="gm-bub__avatar">GM</div>}
-                  <div className="gm-bub__text">
-                    {b.text}
-                    {b.opts && (
-                      <div className="gm-bub__opts">
-                        {b.opts.map(o => (
-                          <button key={o} className="gm-bub__opt" onClick={() => handleAnswer(o)}>{o}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <div className="gm-bub__text">{b.text}</div>
                 </div>
               ))}
 
@@ -820,19 +1473,17 @@ export default function GoatmodePage() {
               <div ref={chatEndRef} />
             </div>
 
-            {!isOptQ && (
-              <div className="gm-chat__input-row">
-                <input
-                  ref={chatInputRef}
-                  className="gm-chat__input"
-                  placeholder="Type your answer…"
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleAnswer(chatInput); }}
-                />
-                <button className="gm-chat__send" onClick={() => handleAnswer(chatInput)}>→</button>
-              </div>
-            )}
+            <div className="gm-chat__input-row">
+              <input
+                ref={chatInputRef}
+                className="gm-chat__input"
+                placeholder="Type your answer…"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAnswer(chatInput); }}
+              />
+              <button className="gm-chat__send" onClick={() => handleAnswer(chatInput)}>→</button>
+            </div>
           </div>
         )}
 
@@ -840,7 +1491,9 @@ export default function GoatmodePage() {
         {screen === 'thinking' && (
           <div className="gm-screen gm-thinking">
             <div className="gm-thinking__logo"><GoatLogo /></div>
-            <div className="gm-thinking__line">{THINKING_LINES[thinking]}</div>
+            <div className="gm-thinking__line">
+              {isCritiquing ? CRITIQUE_LINES[thinking % CRITIQUE_LINES.length] : THINKING_LINES[thinking % THINKING_LINES.length]}
+            </div>
             <div className="gm-thinking__dots"><span /><span /><span /></div>
           </div>
         )}
@@ -864,15 +1517,40 @@ export default function GoatmodePage() {
                 <button className="gm-action-btn gm-action-btn--gpt" onClick={openInChatGPT} disabled={!streamDone}>
                   chatgpt ↗
                 </button>
+                {streamDone && !previewStreaming && (
+                  <button
+                    className="gm-preview-btn"
+                    onClick={runPreview}
+                  >
+                    ▶ preview
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Model Selector Row */}
+            {streamDone && (
+              <div className="gm-model-selector">
+                <span className="gm-model-selector__label">TARGET MODEL</span>
+                {(['claude', 'gpt4', 'gemini'] as TargetModel[]).map(m => (
+                  <button
+                    key={m}
+                    className={`gm-model-chip ${targetModel === m ? 'gm-model-chip--active' : ''}`}
+                    onClick={() => handleModelSwitch(m)}
+                    disabled={targetModel === m}
+                  >
+                    {m === 'claude' ? 'CLAUDE' : m === 'gpt4' ? 'GPT-4O' : 'GEMINI'}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Score + meta row — reveals after streaming done */}
             {streamDone && promptScore > 0 && (
               <div className="gm-score-row">
                 <div className="gm-score">
-                  <span className="gm-score__ring" style={{ '--pct': `${(promptScore / 10) * 100}%` } as React.CSSProperties} />
-                  <span className="gm-score__num">{promptScore.toFixed(1)}</span>
+                  <span className="gm-score__ring" style={{ '--pct': `${(calcScore(activeText) / 10) * 100}%` } as React.CSSProperties} />
+                  <span className="gm-score__num">{calcScore(activeText).toFixed(1)}</span>
                   <span className="gm-score__denom">/10</span>
                   <span className="gm-score__grade">EXPERT GRADE</span>
                 </div>
@@ -890,18 +1568,86 @@ export default function GoatmodePage() {
             <div className="gm-output__card">
               <div className="gm-output__card-header">
                 <span className="gm-output__badge">GOATMODE</span>
-                <span className="gm-output__badge-sub">ENGINEERED PROMPT</span>
+                <span className="gm-output__badge-sub">
+                  {isCritiquing ? 'REFINING...' : 'ENGINEERED PROMPT'}
+                </span>
+                {streamDone && <span className="gm-output__badge-refined">✦ AUTO-REFINED</span>}
                 {!streamDone && <span className="gm-stream-dot" />}
               </div>
               <div className="gm-output__text">
-                {displayed || <span className="gm-output__waiting">Generating...</span>}
-                {!streamDone && displayed && <span className="gm-cursor">▋</span>}
+                {activeVariant === 'orig'
+                  ? (displayed || <span className="gm-output__waiting">Generating...</span>)
+                  : (activeVariant === 'a' ? variantA : variantB)
+                }
+                {!streamDone && displayed && activeVariant === 'orig' && <span className="gm-cursor">▋</span>}
               </div>
             </div>
 
             {/* Everything below only reveals after stream is done */}
             {streamDone && (
               <>
+                {/* Variant bar */}
+                <div className="gm-variant-bar">
+                  {!variantA && !variantB && !generatingVariants && (
+                    <button
+                      className="gm-variant-gen-btn"
+                      onClick={generateVariants}
+                    >
+                      ✦ Generate Variants
+                    </button>
+                  )}
+                  {generatingVariants && (
+                    <span className="gm-variant-gen-btn gm-variant-gen-btn--loading">
+                      Generating variants…
+                    </span>
+                  )}
+                  {(variantA || variantB) && (
+                    <div className="gm-variant-tabs">
+                      <button
+                        className={`gm-variant-tab ${activeVariant === 'orig' ? 'gm-variant-tab--active' : ''}`}
+                        onClick={() => setActiveVariant('orig')}
+                      >
+                        ORIGINAL
+                      </button>
+                      {variantA && (
+                        <button
+                          className={`gm-variant-tab ${activeVariant === 'a' ? 'gm-variant-tab--active' : ''}`}
+                          onClick={() => setActiveVariant('a')}
+                        >
+                          EXPANDED
+                        </button>
+                      )}
+                      {variantB && (
+                        <button
+                          className={`gm-variant-tab ${activeVariant === 'b' ? 'gm-variant-tab--active' : ''}`}
+                          onClick={() => setActiveVariant('b')}
+                        >
+                          TIGHTER
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Live Preview Panel */}
+                {showPreview && (
+                  <div className="gm-preview-panel">
+                    <div className="gm-preview-header">
+                      <span>─── LIVE OUTPUT PREVIEW ───────────────</span>
+                      <button
+                        className="gm-preview-header__close"
+                        onClick={() => { setShowPreviewState(false); setPreviewText(''); }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="gm-preview-text">
+                      {previewText || <span className="gm-output__waiting">Starting preview…</span>}
+                      {previewStreaming && previewText && <span className="gm-cursor">▋</span>}
+                    </div>
+                  </div>
+                )}
+
                 {/* Refinement */}
                 <div className="gm-refine">
                   <div className="gm-refine__label">REFINE THIS PROMPT</div>

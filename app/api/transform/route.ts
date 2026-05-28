@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
           try {
             const stream = client.messages.stream({
               model: 'claude-sonnet-4-5',
-              max_tokens: 2048,
+              max_tokens: 4096,
               system: systemPrompt,
               messages: [{ role: 'user', content: userContent }],
             });
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     // ── NON-STREAMING (used for refine) ─────────────────────────
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 2048,
+      max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
     });
