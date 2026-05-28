@@ -860,6 +860,55 @@ body::after {
   box-shadow: 0 8px 30px var(--glow-p);
 }
 
+/* ─── OUTPUT TYPE CHIPS ─────────────────────── */
+.gm-output-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 16px 20px 56px; /* indent to align under GM bubble */
+  animation: fadeInUp .25s var(--easout) both;
+}
+
+.gm-output-chip {
+  background: rgba(124,108,255,.07);
+  border: 1px solid rgba(124,108,255,.22);
+  color: rgba(242,242,245,.8);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 22px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, transform .15s var(--easspring);
+  white-space: nowrap;
+  letter-spacing: .01em;
+}
+.gm-output-chip:hover {
+  background: rgba(124,108,255,.18);
+  border-color: rgba(124,108,255,.5);
+  color: #fff;
+  transform: translateY(-2px);
+}
+.gm-output-chip:active { transform: translateY(0); }
+
+/* Suggested chip (matches AI's detected type) */
+.gm-output-chip--suggested {
+  background: rgba(124,108,255,.18);
+  border-color: rgba(124,108,255,.55);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(124,108,255,.15);
+}
+.gm-output-chip--suggested:hover {
+  background: rgba(124,108,255,.28);
+  box-shadow: 0 0 20px rgba(124,108,255,.25);
+}
+
+.gm-output-chip__hint {
+  font-size: 11px;
+  opacity: .65;
+  font-weight: 400;
+}
+
 /* ─── THINKING SCREEN ───────────────────────── */
 .gm-thinking {
   justify-content: center;

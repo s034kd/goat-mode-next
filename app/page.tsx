@@ -33,6 +33,33 @@ const CRITIQUE_LINES = [
 
 const REFINE_CHIPS = ['Make it shorter','More direct','More formal','More aggressive','Add examples','Simpler language'];
 
+/* ─── OUTPUT TYPE CHIPS ─────────────────────── */
+const OUTPUT_TYPE_CHIPS = [
+  { emoji: '📧', label: 'Email',           type: 'email'         },
+  { emoji: '🖼️', label: 'Image / Visual',  type: 'image'         },
+  { emoji: '💻', label: 'Code',            type: 'coding'        },
+  { emoji: '📄', label: 'Written piece',   type: 'writing'       },
+  { emoji: '📱', label: 'Social post',     type: 'marketing'     },
+  { emoji: '📋', label: 'Strategy / Brief',type: 'strategy'      },
+  { emoji: '📊', label: 'Analysis',        type: 'analysis'      },
+  { emoji: '🎬', label: 'Script',          type: 'creative'      },
+  { emoji: '💬', label: 'Message / Chat',  type: 'communication' },
+  { emoji: '🔧', label: 'Something else',  type: ''              },
+];
+
+// Map detected type → chip type for pre-highlighting
+const TYPE_TO_CHIP: Record<string, string> = {
+  email: 'email', negotiation: 'email',
+  image: 'image',
+  coding: 'coding',
+  writing: 'writing', education: 'writing',
+  marketing: 'marketing',
+  strategy: 'strategy',
+  analysis: 'analysis', research: 'analysis',
+  creative: 'creative',
+  communication: 'communication',
+};
+
 const TYPE_LABELS: Record<string, string> = {
   negotiation: 'Negotiation',
   communication: 'Communication',
@@ -231,9 +258,14 @@ function buildQuestionSystemPrompt(raw: string, conv: Conv[], profile: Profile |
 
   const exchangeCount = conv.length;
 
+  // Detect if output format was already confirmed (first conv entry is always the output type pick)
+  const outputFormatConfirmed = conv.length > 0 && conv[0].q.includes('output format');
+  const confirmedFormat = outputFormatConfirmed ? conv[0].a : null;
+
   return `You are the sharpest requirements analyst alive. You've processed 100,000 briefs. You know exactly what separates a prompt that changes the outcome from one that gets ignored.
 ${profileBlock}
 USER'S TASK: "${raw}"
+${confirmedFormat ? `\nOUTPUT FORMAT CONFIRMED: "${confirmedFormat}" — the user has explicitly chosen this. FORMAT score = 2. NEVER ask about format, output type, or what they want to create — it's locked.` : ''}
 ${exchangeCount > 0 ? `\nCONVERSATION SO FAR:\n${convText}` : ''}
 
 ━━━ PHASE 1 — SIGNAL EXTRACTION (internal reasoning only — never output this) ━━━
@@ -664,6 +696,8 @@ export default function GoatmodePage() {
   const [chatInput, setChatInput]     = useState('');
   const [isGMTyping, setIsGMTyping]   = useState(false);
   const [currentType, setType]        = useState('writing');
+  const [showOutputChips, setShowOutputChips] = useState(false);
+  const [suggestedChipType, setSuggestedChipType] = useState('');
 
   /* Paste context panel */
   const [pasteCtx, setPasteCtx]       = useState('');
@@ -914,22 +948,51 @@ export default function GoatmodePage() {
     setShowPaste(false);
     setBubbles([]);
     setStreamDone(false);
+    setShowOutputChips(false);
+    setSuggestedChipType(TYPE_TO_CHIP[type] || '');
     setScreen('chat');
 
+    /* Always ask output format FIRST — 1 tap confirms what we're building */
     setTimeout(() => {
       setIsGMTyping(true);
       setTimeout(() => {
         setIsGMTyping(false);
-        addBub('ai', 'On it. Let me ask you a few sharp questions to build this right.');
-        setTimeout(() => generateNextQuestion(raw, [], type), 600);
-      }, 720);
+        addBub('ai', 'What\'s the final output you want? Pick one — I\'ll engineer it precisely for that format.');
+        setShowOutputChips(true);
+      }, 600);
     }, 280);
-  }, [rawInput, inputMode, addBub, generateNextQuestion, runEngine]);
+  }, [rawInput, inputMode, addBub, runEngine]);
+
+  /* ── OUTPUT TYPE PICKED ── */
+  const handleOutputTypePick = useCallback(async (chipLabel: string, chipType: string) => {
+    setShowOutputChips(false);
+    addBub('user', chipLabel);
+
+    /* Lock in the confirmed type (overrides detectType guess) */
+    const confirmedType = chipType || currentType;
+    setType(confirmedType);
+
+    /* Record as first conversation entry */
+    const outputQ = 'What\'s the final output format you want?';
+    const newConv: Conv[] = [{ q: outputQ, a: chipLabel }];
+    setConversation(newConv);
+
+    /* Short pause then kick off smart questions */
+    setTimeout(() => {
+      generateNextQuestion(rawInput, newConv, confirmedType);
+    }, 380);
+  }, [currentType, rawInput, addBub, generateNextQuestion]);
 
   /* ── ANSWER QUESTION (with vague-answer detection) ── */
   const handleAnswer = useCallback(async (answer: string) => {
     if (!answer.trim()) return;
     setChatInput('');
+
+    /* If output type chips are still showing, treat typed answer as chip pick */
+    if (showOutputChips) {
+      handleOutputTypePick(answer.trim(), '');
+      return;
+    }
 
     /* Check if answer is vague */
     const trimmed = answer.trim();
@@ -950,7 +1013,7 @@ export default function GoatmodePage() {
     setConversation(newConv);
 
     await generateNextQuestion(rawInput, newConv, currentType);
-  }, [conversation, currentDynamicQ, rawInput, currentType, addBub, generateNextQuestion]);
+  }, [conversation, currentDynamicQ, rawInput, currentType, addBub, generateNextQuestion, showOutputChips, handleOutputTypePick]);
 
   /* ── SKIP ── */
   const handleSkip = useCallback(async () => {
@@ -1096,6 +1159,8 @@ export default function GoatmodePage() {
     setDisplayed('');
     setStreamDone(false);
     setIsGMTyping(false);
+    setShowOutputChips(false);
+    setSuggestedChipType('');
     setInputMode('build');
     /* Reset variants */
     setVariantA('');
@@ -1422,6 +1487,24 @@ export default function GoatmodePage() {
                 </div>
               )}
 
+              {/* ── Output type chip picker ── */}
+              {showOutputChips && (
+                <div className="gm-output-chips">
+                  {OUTPUT_TYPE_CHIPS.map(chip => (
+                    <button
+                      key={chip.label}
+                      className={`gm-output-chip ${TYPE_TO_CHIP[suggestedChipType] === chip.type ? 'gm-output-chip--suggested' : ''}`}
+                      onClick={() => handleOutputTypePick(`${chip.emoji} ${chip.label}`, chip.type)}
+                    >
+                      {chip.emoji} {chip.label}
+                      {TYPE_TO_CHIP[suggestedChipType] === chip.type && (
+                        <span className="gm-output-chip__hint"> · detected</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div ref={chatEndRef} />
             </div>
 
@@ -1429,7 +1512,7 @@ export default function GoatmodePage() {
               <textarea
                 ref={chatInputRef}
                 className="gm-chat__input"
-                placeholder="Type your answer…"
+                placeholder={showOutputChips ? 'Or type your output format here…' : 'Type your answer…'}
                 value={chatInput}
                 rows={3}
                 onChange={e => setChatInput(e.target.value)}
