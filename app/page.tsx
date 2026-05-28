@@ -45,6 +45,7 @@ const TYPE_LABELS: Record<string, string> = {
   education: 'Education',
   research: 'Research',
   email: 'Email',
+  image: 'Image Gen',
 };
 
 const TECHNIQUES: Record<string, {code:string;desc:string}[]> = {
@@ -108,6 +109,8 @@ const TECHNIQUES: Record<string, {code:string;desc:string}[]> = {
 /* ─── DETECT TYPE ───────────────────────────── */
 function detectType(t: string): string {
   const l = t.toLowerCase();
+  // Image detection — check first, highest priority
+  if (/\b(image|photo|picture|illustration|drawing|render|visual|generate.*image|create.*image|make.*image|design.*image|portrait|logo|thumbnail|banner|poster|midjourney|dall.?e|stable diffusion|flux|firefly|artwork|wallpaper|scene|shot of|looks like|appearance)\b/.test(l)) return 'image';
   if (/\b(raise|salary|promotion|pay increase|compensation|negotiate)\b/.test(l)) return 'negotiation';
   if (/\b(difficult conversation|hard talk|confrontation|conflict|feedback to|performance issue|delay|bad news|explain to|status update)\b/.test(l)) return 'communication';
   if (/\b(code|build|develop|function|app|api|script|debug|refactor|implement|engineer|program)\b/.test(l)) return 'coding';
@@ -125,20 +128,23 @@ function detectType(t: string): string {
 function calcScore(prompt: string): number {
   let s = 7.0;
   const len = prompt.length;
-  if (len > 400)  s += 0.3;
-  if (len > 800)  s += 0.3;
-  if (len > 1200) s += 0.2;
-  if (len > 1800) s += 0.1;
-  if (prompt.includes('<role>'))             s += 0.3;
-  if (prompt.includes('<pre_work>'))         s += 0.3;
-  if (prompt.includes('<constraints>'))      s += 0.2;
-  if (prompt.includes('<output_format>'))    s += 0.2;
-  if (prompt.includes('<quality_standard>')) s += 0.2;
-  if (/\d+%/.test(prompt))                   s += 0.15;
-  if (/\d+ years/.test(prompt))              s += 0.1;
-  if (/Do NOT/i.test(prompt))                s += 0.1;
-  if ((prompt.match(/<[a-z_]+>/g) || []).length >= 5) s += 0.15;
-  return Math.min(9.9, Math.max(7.8, +s.toFixed(1)));
+  if (len > 300)  s += 0.3;
+  if (len > 600)  s += 0.3;
+  if (len > 900)  s += 0.2;
+  if (len > 1400) s += 0.1;
+  // Reward clean structured prompts
+  if (/Act as|You are a/.test(prompt))              s += 0.2; // has persona
+  if (/\*\*[A-Z][^*]+\*\*/.test(prompt))            s += 0.2; // has bold headers
+  if (/Before you write|Before writing/i.test(prompt)) s += 0.3; // has pre-work
+  if (/Requirements:/i.test(prompt))                s += 0.2; // has requirements
+  if (/Begin your response with/i.test(prompt))     s += 0.3; // has output primer
+  if (/Do NOT|must not|never/i.test(prompt))        s += 0.1; // has hard constraints
+  if (/\d+%/.test(prompt))                          s += 0.15; // has metrics
+  if (/\d+ words|\d+-word/i.test(prompt))           s += 0.1; // has length spec
+  // Penalise XML tags — they break paste-into-ChatGPT
+  const xmlCount = (prompt.match(/<[a-z_]+>/g) || []).length;
+  if (xmlCount > 0) s -= xmlCount * 0.15;
+  return Math.min(9.9, Math.max(7.0, +s.toFixed(1)));
 }
 
 /* ─── IMPROVE-MODE SYSTEM PROMPT ────────────── */
@@ -436,8 +442,54 @@ CRITICAL OUTPUT RULES:
 - The user will paste this directly into ChatGPT or Gemini and immediately get their output.`;
 }
 
+/* ─── IMAGE-SPECIFIC META PROMPT ────────────── */
+function buildImageMetaPrompt(): string {
+  return `You are a world-class AI image prompt engineer. You know exactly how to describe a visual so that Midjourney, DALL-E, Gemini Image, Stable Diffusion, and Flux produce precisely what the user has in mind — on the first try.
+
+Your ONLY job: turn the user's image idea into a single, ready-to-paste image generation prompt.
+
+━━━ THINK FIRST (never write this out) ━━━
+Before writing, extract every visual detail:
+• Subject: What is the main object/person/scene? What makes it unique?
+• Style: Photorealistic? Illustration? Oil painting? Cinematic? Product photography?
+• Mood: What feeling should this image evoke?
+• Setting: Where is it? What's in the background?
+• Lighting: Golden hour? Studio? Neon? Candlelight? Harsh shadows?
+• Colours: Dominant palette? Specific hues?
+• Composition: Close-up? Wide shot? Bird's eye? Rule of thirds?
+• Technical: Resolution, depth of field, lens type, aspect ratio?
+• Cultural/stylistic cues: Any specific aesthetic, era, or reference?
+
+━━━ WRITE THE PROMPT ━━━
+Structure it in this exact order, all in ONE flowing paragraph:
+[Main subject with specific visual details] — [setting/environment] — [mood/atmosphere] — [lighting] — [colour palette] — [style/medium] — [composition] — [technical quality specs]
+
+RULES:
+— Every word must describe something a camera, renderer, or artist can literally produce
+— No abstract adjectives: "beautiful", "amazing", "stunning", "cool" — BANNED. Describe WHAT makes it beautiful instead.
+— Name specific visual references where helpful: "like a Don Julio bottle", "shot like a Vogue cover", "in the style of cinematic iPhone photography"
+— Include texture, material, and surface details — these are what make AI images look real
+— End with a new line showing: aspect ratio recommendation + which generators this works best for
+
+EXAMPLES OF WEAK vs STRONG:
+✗ Weak: "A beautiful perfume bottle"
+✓ Strong: "A hand-blown amber glass perfume bottle with an agave plant etched into the surface, cork stopper wrapped in raw twine, aged parchment label with gold foil lettering, sitting on a weathered oak bar, blurred agave field through a dusty window behind it, warm golden hour light raking across the glass highlighting the engraving, luxury product photography macro shot, ultra-realistic, 8K, shallow depth of field, warm amber and earth tones"
+
+OUTPUT FORMAT:
+[Visual description paragraph]
+
+**Aspect ratio:** [e.g. 1:1 for Instagram, 16:9 for wallpaper, 4:5 for portrait, 3:2 for landscape]
+**Works best in:** [e.g. Midjourney, DALL-E 3, Gemini Image, Stable Diffusion XL]
+**Midjourney suffix (optional):** --ar [ratio] --style raw --v 6
+
+Output ONLY the image prompt. No preamble. No explanation. The user pastes this and gets their image.`;
+}
+
 /* ─── MODEL-AWARE META PROMPT ───────────────── */
-function buildMetaPromptForModel(model: TargetModel, profile: Profile | null): string {
+function buildMetaPromptForModel(model: TargetModel, profile: Profile | null, type = ''): string {
+  // Image tasks need a completely different prompt format
+  if (type === 'image') return buildImageMetaPrompt();
+
   let base = buildMetaPrompt();
 
   if (profile) {
@@ -467,6 +519,7 @@ function getRole(type: string): string {
     writing:'You are a professional writer with 20 years of bylines in The Atlantic and Harvard Business Review. The first draft is always too long.',
     research:'You are a senior research analyst who has synthesized 10,000+ industry reports for Fortune 500 boards. Your first instinct is to triangulate and challenge assumptions.',
     email:'You are an email strategist who has optimized 50,000+ outreach campaigns. Your open rates run 40% above industry average. Every word earns its place.',
+    image:'You are a visual art director and AI image prompt specialist with 15 years of product photography and creative direction. You know exactly how to describe a visual so any AI image generator produces it precisely.',
   };
   return r[type] || r.writing;
 }
@@ -484,6 +537,7 @@ function getObjective(type: string, raw: string): string {
     education:'An explanation that leaves the reader genuinely understanding, not just nodding along.',
     research:'Synthesized intelligence that directly informs the decision — not a literature dump.',
     email:'A sent-ready email under 100 words with one clear, unmissable ask.',
+    image:'A detailed visual description prompt that produces the exact image when pasted into Midjourney, DALL-E, Gemini Image, or Stable Diffusion.',
   };
   return o[type] || `A complete, expert-level response to: "${raw}". Professional bar. No filler.`;
 }
@@ -501,6 +555,7 @@ function getConstraints(type: string): string {
     education:'No: jargon without definition, skipped logical steps, condescension, "simply" / "obviously."',
     research:'No: unsourced claims, summary without synthesis, confirmation bias, recommendations without evidence.',
     email:'No: lengthy preamble, multiple asks, vague subject lines, passive voice, apologetic openers.',
+    image:'No: abstract adjectives without visual meaning ("beautiful", "amazing", "cool"). Every word must describe something a camera or renderer can capture.',
   };
   return c[type] || 'No filler, passive voice, or vague language. Precise and direct.';
 }
@@ -518,6 +573,7 @@ function getFormat(type: string): string {
     education:'(a) Keystone concept. (b) The analogy. (c) Layered explanation. (d) 3 misconceptions addressed. (e) Sticky summary.',
     research:'(a) Key findings — 5 bullets max. (b) Evidence map. (c) Synthesis. (d) Decision implications.',
     email:'(a) Subject line with formula label. (b) Complete email. (c) One-line follow-up if no reply.',
+    image:'One rich visual description paragraph (subject → setting → mood → lighting → style → technical specs), then on a new line: suggested aspect ratio and which generator this is optimized for.',
   };
   return f[type] || 'A complete, structured response appropriate to the task.';
 }
@@ -535,6 +591,7 @@ function getQuality(type: string): string {
     education:'The reader feels genuinely smarter — with a mental model they can explain to someone else tomorrow.',
     research:'A board member reads this and says: "This changes how I\'d vote on the decision."',
     email:'The recipient opens it, reads it once, and knows exactly what to do next.',
+    image:'Paste it into DALL-E or Gemini Image and the output matches the vision — no re-prompting needed.',
   };
   return q[type] || 'Precise, structured, every sentence earning its place.';
 }
@@ -862,7 +919,7 @@ export default function GoatmodePage() {
       addBub('ai', 'Got everything I need. Building your prompt now...');
       setTimeout(() => {
         const uc = buildUserContentDynamic(raw, conv, pasteCtxRef.current);
-        runEngine(uc, type, raw, buildMetaPromptForModel(targetModelRef.current, profileRef.current), conv);
+        runEngine(uc, type, raw, buildMetaPromptForModel(targetModelRef.current, profileRef.current, type), conv);
       }, 380);
       return;
     }
@@ -907,7 +964,7 @@ export default function GoatmodePage() {
         addBub('ai', 'Perfect — I have everything I need. Engineering your prompt now...');
         setTimeout(() => {
           const uc = buildUserContentDynamic(raw, conv, pasteCtxRef.current);
-          runEngine(uc, type, raw, buildMetaPromptForModel(targetModelRef.current, profileRef.current), conv);
+          runEngine(uc, type, raw, buildMetaPromptForModel(targetModelRef.current, profileRef.current, type), conv);
         }, 380);
       } else {
         setIsGMTyping(false);
@@ -991,7 +1048,7 @@ export default function GoatmodePage() {
   /* ── SKIP ── */
   const handleSkip = useCallback(async () => {
     const uc = buildUserContentDynamic(rawInput, conversation, pasteCtxRef.current);
-    await runEngine(uc, currentType, rawInput, buildMetaPromptForModel(targetModelRef.current, profileRef.current), conversation);
+    await runEngine(uc, currentType, rawInput, buildMetaPromptForModel(targetModelRef.current, profileRef.current, currentType), conversation);
   }, [rawInput, conversation, currentType, runEngine]);
 
   /* ── OUTPUT ACTIONS ── */
@@ -1093,7 +1150,7 @@ export default function GoatmodePage() {
     setShowPreviewState(false);
     /* Re-generate with new model system prompt */
     const uc = buildUserContentDynamic(rawInput, conversation, pasteCtxRef.current);
-    await runEngine(uc, currentType, rawInput, buildMetaPromptForModel(model, profileRef.current), conversation);
+    await runEngine(uc, currentType, rawInput, buildMetaPromptForModel(model, profileRef.current, currentType), conversation);
   }, [targetModel, rawInput, conversation, currentType, runEngine]);
 
   /* ── LIVE PREVIEW ── */
