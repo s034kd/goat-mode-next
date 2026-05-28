@@ -541,26 +541,41 @@ function getQuality(type: string): string {
 
 function buildOfflinePrompt(raw: string, conv: Conv[], type: string): string {
   const role = getRole(type);
-  const contextLines = conv.map(c => `  — ${c.a}`);
+  const contextLines = conv.map(c => `— ${c.a}`).join('\n');
 
-  return [
-    '<role>',`  ${role}`,'</role>','',
-    '<context>',
-    `  Task: "${raw}"`,
-    ...contextLines,
-    '</context>','',
-    '<objective>',`  ${getObjective(type, raw)}`,'</objective>','',
-    '<task>',
-    '  1. Address the task directly and completely.',
-    '  2. Apply your expert role throughout every sentence.',
-    '  3. Reference the specific context provided above.',
-    '  4. Prioritize precision and actionability over comprehensiveness.',
-    '  5. Every paragraph must earn its place.',
-    '</task>','',
-    '<constraints>',`  ${getConstraints(type)}`,'</constraints>','',
-    '<output_format>',`  ${getFormat(type)}`,'</output_format>','',
-    '<quality_standard>',`  ${getQuality(type)}`,'</quality_standard>',
-  ].join('\n');
+  return `Act as ${role}
+
+**Context:**
+Task: "${raw}"
+${contextLines ? contextLines : ''}
+
+**Your task:**
+${getObjective(type, raw)}
+
+**Before you write:**
+${type === 'coding' ? 'Write all function signatures first. List the 3 most likely runtime failures. Then implement.' :
+  type === 'analysis' ? 'Form 3 competing hypotheses. State what would disprove each. Only then examine the data.' :
+  type === 'negotiation' ? 'Map the other party\'s BATNA and the 2 sentences that end this badly before writing.' :
+  type === 'strategy' ? 'Find the one binding constraint that, if removed, changes everything. Sequence reversible decisions first.' :
+  type === 'creative' ? 'Generate the 3 most obvious directions. Reject them all. Then write what exists nowhere else.' :
+  'Identify the reader\'s unstated question. Write the ending first, then build backwards.'}
+
+**Requirements:**
+${getConstraints(type)}
+
+**Format:**
+${getFormat(type)}
+
+**Your output passes only if:**
+${getQuality(type)}
+
+Begin your response with: "${
+  type === 'coding' ? '// Architecture overview:' :
+  type === 'analysis' ? 'The core finding is:' :
+  type === 'email' || type === 'negotiation' || type === 'communication' ? 'Subject:' :
+  type === 'strategy' ? 'The binding constraint is:' :
+  'Here is'
+}"`;
 }
 
 /* ─── BUILD USER CONTENT ────────────────────── */
@@ -859,7 +874,7 @@ export default function GoatmodePage() {
     let bubCreated  = false;
 
     try {
-      // Question generation uses extended thinking — Claude reasons through all gaps before picking one
+      // Questions use standard model — needs to be fast (no extended thinking)
       const finalText = await streamFetch(
         'Generate the next question.',
         systemPrompt,
@@ -877,8 +892,8 @@ export default function GoatmodePage() {
               b.id === streamBubId ? { ...b, text: full } : b
             ));
           }
-        },
-        true  // extended thinking ON
+        }
+        // no extended thinking for questions — speed matters here
       );
 
       const response = (finalText || '').trim();
