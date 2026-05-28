@@ -604,7 +604,7 @@ export default function GoatmodePage() {
 
   /* Thinking */
   const [thinking, setThinking]       = useState(0);
-  const [isCritiquing, setIsCritiquing] = useState(false);
+  const [isCritiquing] = useState(false); // kept for badge display only
 
   /* History */
   const [history, setHistory]         = useState<Saved[]>([]);
@@ -706,7 +706,6 @@ export default function GoatmodePage() {
   ) => {
     setScreen('thinking');
     setThinking(0);
-    setIsCritiquing(false);
     setStreamDone(false);
     setDisplayed('');
     setVariantA('');
@@ -715,53 +714,26 @@ export default function GoatmodePage() {
     setPreviewText('');
     setShowPreviewState(false);
 
-    let draftFull = '';
+    let full = '';
 
     try {
-      // ── PASS 1: Generate draft silently (stay on thinking screen) ──
-      // Pass 1: generate draft (fast, no extended thinking)
-      const draft = await streamFetch(userContent, sysPrompt, (full) => {
-        draftFull = full;
+      // Single pass — stream directly to output screen as tokens arrive
+      let started = false;
+      const result = await streamFetch(userContent, sysPrompt, (chunk) => {
+        full = chunk;
+        if (!started) {
+          started = true;
+          setScreen('output');
+        }
+        setDisplayed(chunk);
+        setPrompt(chunk);
       });
-      const draftText = draft || draftFull;
-      if (!draftText || draftText.length < 80) throw new Error('Draft too short');
 
-      // ── PASS 2: Auto-critique streams the refined prompt to output screen ──
-      setIsCritiquing(true);
-      setThinking(0);
-
-      let critiqueStarted = false;
-      let critiqueFull = '';
-
-      try {
-        const refined = await streamFetch(
-          `Evaluate and improve this prompt:\n\n${draftText}`,
-          buildCritiquePrompt(type),
-          (full) => {
-            critiqueFull = full;
-            if (!critiqueStarted) {
-              critiqueStarted = true;
-              setScreen('output'); // Switch to output when first critique token arrives
-            }
-            setDisplayed(full);
-            setPrompt(full);
-          }
-        );
-
-        const finalText = refined || critiqueFull;
-        // Use critique result only if substantial (at least 40% of draft length)
-        const best = (finalText && finalText.length > draftText.length * 0.4) ? finalText : draftText;
-        setIsCritiquing(false);
-        finaliseOutput(best, type, raw);
-
-      } catch {
-        // Critique failed — show draft directly
-        setIsCritiquing(false);
-        finaliseOutput(draftText, type, raw);
-      }
+      const finalText = result || full;
+      if (!finalText || finalText.length < 20) throw new Error('Response too short');
+      finaliseOutput(finalText, type, raw);
 
     } catch {
-      setIsCritiquing(false);
       const fb = buildOfflinePrompt(raw, conv, type);
       finaliseOutput(fb, type, raw);
     }
