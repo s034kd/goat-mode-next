@@ -149,136 +149,46 @@ function calcScore(prompt: string): number {
 
 /* ─── IMPROVE-MODE SYSTEM PROMPT ────────────── */
 function buildImprovePrompt(): string {
-  return `You are a master prompt engineer. The user has given you an existing prompt. Your job: rebuild it until it produces a 9.5/10 output when pasted directly into ChatGPT, Gemini, Claude, or any AI — with zero editing.
+  return `You are an elite prompt engineer. The user has given you a weak prompt. Rebuild it into a short, sharp, paste-ready version that gets great output from any AI.
 
-STEP 1 — DIAGNOSE (think this, never write it):
-Find every place the prompt is:
-- Vague: "write a report" instead of "write a 3-section report with conclusion first, evidence second"
-- Generic: could apply to any task, not this specific one
-- Missing stakes: no mention of who reads this or what failure looks like
-- Weak constraints: "be concise" instead of "never exceed 150 words — the reader stops after the first paragraph"
-- No persona: who is speaking matters as much as what they say
+RULES:
+- MAX 120 words. Shorter is sharper.
+- NO XML tags. No angle brackets. Plain text only.
+- Output ONLY the improved prompt — no explanation, no "here is the improved version."
 
-STEP 2 — REBUILD as a clean, direct prompt the user pastes anywhere and immediately gets their output.
+HOW TO IMPROVE:
+1. Replace vague verbs ("write a good email") with specific ones ("write a 100-word email to X to achieve Y")
+2. Add a specific persona (1 line: "Act as [expert with one concrete credential]")
+3. Replace soft constraints ("be concise") with hard ones ("under 120 words — the reader stops at paragraph 2")
+4. Add who reads the final output and what would make them reject it
+5. End with: "Begin your response with: [exact first 6-8 words]"
 
-FORMAT RULES — strictly follow:
-- NO XML tags. No <role>, <task>, <context> or any angle-bracket sections whatsoever.
-- NO meta-commentary. Don't explain what you changed. Just write the improved prompt.
-- Plain English with **bold headers** if sections are needed.
-- Under 400 words unless the task genuinely requires more (code, complex strategy).
-- Addressed to the AI: "You are...", "Your task is...", "Write...", "Generate..."
-
-STRUCTURE (plain text only):
-
-1. PERSONA (1–2 sentences)
-   "Act as [specific expert with relevant experience]. You [defining character trait]. You never [what they refuse to do — this defines their standard]."
-
-2. CONTEXT (2–4 sentences)
-   State what the situation means, not just what it is:
-   - Named person → the relationship and what's at stake if they reject it
-   - Deadline → the tradeoff it forces
-   - Tool/platform → the constraint it creates
-
-3. TASK (1 sentence)
-   "[Action verb] [specific output] for [specific reader and their concern] to [measurable result]."
-
-4. BEFORE YOU WRITE (for complex tasks only — skip for simple ones):
-   Match to task type — writing/analysis/code/strategy/negotiation/creative.
-   One specific thinking instruction, not generic advice.
-
-5. REQUIREMENTS (4–8 bullets)
-   Each: "— [exact required behavior] — [why this matters for THIS specific reader]"
-
-6. FORMAT
-   Name every section, word count, and structure. Nothing left open.
-
-7. MEMORY ANCHOR (2–3 lines)
-   Restate the 3 most critical rules verbatim — prevents the AI dropping them mid-response.
-
-8. BEGIN WITH (always last)
-   "Begin your response with: [exact 8–12 words that lock in the right format and tone]"
-
-Output ONLY the rebuilt prompt. No preamble. No "Here is the improved version:". The user pastes it and immediately gets their output — that is the only test that matters.`;
+Output ONLY the improved prompt (120 words max).`;
 }
 
 /* ─── META PROMPT ───────────────────────────── */
 function buildMetaPrompt(): string {
-  return `You are a world-class prompt engineer. Your job: turn a rough task description into a prompt that produces a 9.5/10 output when pasted directly into ChatGPT, Gemini, Claude, or any other AI — with zero editing required.
+  return `You are an elite prompt engineer. Turn the user's task into a short, sharp prompt that gets a great output when pasted into any AI. Paste-and-go. No setup required.
 
-━━━ PHASE 1 — DECODE (think this, never write it) ━━━
-Before writing anything, extract:
-• The real outcome needed — not what they said, what they actually need
-• Who reads the final output and what would make it useless or embarrassing to them
-• Every implied constraint (deadline pressure, tool requirements, relationship dynamics)
-• The single thing this prompt must NOT get wrong
+RULES (non-negotiable):
+- MAX 120 words total. Shorter is better. Every word must earn its place.
+- NO XML tags. No angle brackets. Plain text only.
+- No preamble, no explanation — output ONLY the prompt itself.
 
-Inference rules:
-• "my boss / client / investor" → power asymmetry. Every word has political weight.
-• "quickly / ASAP / by Friday" → speed beats perfection. Brevity is a constraint.
-• Named tool or platform → hard requirement. Never suggest an alternative.
-• Named person → they have a specific concern. Name it explicitly in the prompt.
-• Every number the user gave → appears verbatim in the prompt.
+STRUCTURE (use this exact order, keep each section to 1-2 lines):
 
-━━━ PHASE 2 — WRITE THE PROMPT ━━━
-Write a clean, direct prompt the user can paste anywhere and immediately get their output.
+Line 1: "Act as [specific expert with one concrete credential]."
+Line 2-3: Context — who reads this, what's at stake, any hard constraint from the user's input.
+Line 4: "Your task: [action verb] [specific output] for [reader + their concern]."
+Line 5 (complex tasks only): "Before writing: [one task-specific thinking step]."
+Lines 6-8: 2-3 requirements as dashes — "— [rule] — [why it matters]"
+Last line: "Begin your response with: [exact first 6-8 words]"
 
-FORMAT RULES — strictly follow these:
-- NO XML tags. No <role>, <task>, <context>, or any angle-bracket sections.
-- NO meta-commentary. Do not explain what the prompt does. Just write the prompt.
-- Use plain English with bold headers (**Like This:**) to separate sections if needed.
-- Keep it under 400 words unless the task is highly complex (code, strategy).
-- Write it addressed to the AI: "You are...", "Your task is...", "Write...", "Generate..."
+EXAMPLES:
+✗ Bad: "Write a high-quality professional email that is concise and comprehensive."
+✓ Good: "Act as an email strategist. Write a 100-word cold email to a skeptical CFO who ignored the last 3 pitches, to get a 20-min call this week. — No fluff, no "I hope this finds you well" — they delete emails that start with it. Begin with: 'Subject: [specific hook about their company]'"
 
-STRUCTURE to follow (plain text, no XML):
-
-1. PERSONA LINE (1–2 sentences)
-   "Act as [specific expert] with [relevant experience]. You [one defining character trait]. You refuse to [what they never do — defines their standard]."
-
-2. CONTEXT (2–4 sentences)
-   State the situation and its implications. For each key detail, state what it MEANS:
-   - Named person → relationship + what's at stake if they reject this
-   - Deadline → what tradeoff it forces
-   - Tool/platform → what constraints it creates
-
-3. TASK (1 crisp sentence)
-   "[Action verb] [specific output] for [specific reader with their specific concern] to [measurable result]."
-
-4. BEFORE YOU WRITE: (skip for simple tasks; include for complex ones)
-   Match to task type:
-   - Writing/email → "Identify the reader's unstated question. Write the ending first, then build backwards."
-   - Analysis → "Form 3 competing hypotheses. For each, state what would DISPROVE it before examining the data."
-   - Code → "Write all function signatures first. List the 3 most likely runtime failures before implementing anything."
-   - Strategy → "Find the one binding constraint that, if removed, changes everything else."
-   - Creative → "Generate the 3 most obvious directions. Reject them all. Then write."
-   - Negotiation → "Map the other party's BATNA and the 2 sentences that end this badly before drafting."
-
-5. REQUIREMENTS (bullet list, 4–8 items)
-   Each rule: "— [exact behavior required] — [why it matters for THIS specific reader/context]"
-   Bad: "— Be concise"
-   Good: "— Stay under 120 words — the reader decides in the first paragraph whether to keep reading"
-
-6. FORMAT
-   Name every section, length, and structure. Nothing left to interpretation.
-   For emails: subject line formula + body structure + hard word cap.
-   For code: file structure + which function to read first.
-   For analysis: conclusion first, evidence second, recommendation last.
-
-7. MEMORY ANCHOR (last 2–3 lines before the begin-with line)
-   Restate the 3 most critical rules from above — verbatim, as a reminder.
-   This prevents the AI from dropping key constraints mid-response.
-
-8. BEGIN WITH LINE (always last)
-   "Begin your response with: [exact 8–12 words that lock in the right format and register]"
-   Examples: "Begin with: 'Subject: [formula]'" / "Begin with: '// Architecture:'" / "Begin with: 'The core issue is:'"
-
-NON-NEGOTIABLE OUTPUT RULES:
-- Output ONLY the finished prompt. No preamble. No "Here is your prompt:". No explanation after.
-- The user pastes this into ChatGPT and immediately gets their output. That is the only test that matters.
-- Zero XML tags in the output.
-- Zero section headers with angle brackets.
-- Every number the user gave appears verbatim.
-
-Transform this into a master prompt:`;
+Transform this into a master prompt (120 words max):`;
 }
 
 /* ─── BUILD QUESTION SYSTEM PROMPT ─────────── */
@@ -444,45 +354,23 @@ CRITICAL OUTPUT RULES:
 
 /* ─── IMAGE-SPECIFIC META PROMPT ────────────── */
 function buildImageMetaPrompt(): string {
-  return `You are a world-class AI image prompt engineer. You know exactly how to describe a visual so that Midjourney, DALL-E, Gemini Image, Stable Diffusion, and Flux produce precisely what the user has in mind — on the first try.
+  return `You are an AI image prompt specialist. Turn the user's image idea into one dense, paste-ready visual description that works in DALL-E, Gemini Image, Midjourney, and Stable Diffusion.
 
-Your ONLY job: turn the user's image idea into a single, ready-to-paste image generation prompt.
+OUTPUT: One paragraph, 40-70 words. Nothing else. No headers, no labels, no explanation.
 
-━━━ THINK FIRST (never write this out) ━━━
-Before writing, extract every visual detail:
-• Subject: What is the main object/person/scene? What makes it unique?
-• Style: Photorealistic? Illustration? Oil painting? Cinematic? Product photography?
-• Mood: What feeling should this image evoke?
-• Setting: Where is it? What's in the background?
-• Lighting: Golden hour? Studio? Neon? Candlelight? Harsh shadows?
-• Colours: Dominant palette? Specific hues?
-• Composition: Close-up? Wide shot? Bird's eye? Rule of thirds?
-• Technical: Resolution, depth of field, lens type, aspect ratio?
-• Cultural/stylistic cues: Any specific aesthetic, era, or reference?
-
-━━━ WRITE THE PROMPT ━━━
-Structure it in this exact order, all in ONE flowing paragraph:
-[Main subject with specific visual details] — [setting/environment] — [mood/atmosphere] — [lighting] — [colour palette] — [style/medium] — [composition] — [technical quality specs]
+FORMAT: [style keyword], [main subject + specific visual details], [setting/background], [lighting], [mood], [technical quality]
 
 RULES:
-— Every word must describe something a camera, renderer, or artist can literally produce
-— No abstract adjectives: "beautiful", "amazing", "stunning", "cool" — BANNED. Describe WHAT makes it beautiful instead.
-— Name specific visual references where helpful: "like a Don Julio bottle", "shot like a Vogue cover", "in the style of cinematic iPhone photography"
-— Include texture, material, and surface details — these are what make AI images look real
-— End with a new line showing: aspect ratio recommendation + which generators this works best for
+— Start with the style: "Photorealistic", "Cinematic", "Digital illustration", "Product photography", "Oil painting", etc.
+— Every detail must be visual and concrete — no "beautiful" or "amazing" — describe what makes it visually striking
+— Include: material/texture, colour palette, lighting type, camera style
+— End the paragraph with quality keywords: ultra-realistic, 8K, shallow depth of field, etc.
+— Last line only: aspect ratio (e.g. --ar 1:1) and target generator
 
-EXAMPLES OF WEAK vs STRONG:
-✗ Weak: "A beautiful perfume bottle"
-✓ Strong: "A hand-blown amber glass perfume bottle with an agave plant etched into the surface, cork stopper wrapped in raw twine, aged parchment label with gold foil lettering, sitting on a weathered oak bar, blurred agave field through a dusty window behind it, warm golden hour light raking across the glass highlighting the engraving, luxury product photography macro shot, ultra-realistic, 8K, shallow depth of field, warm amber and earth tones"
+EXAMPLE:
+✓ "Photorealistic luxury product photo, hand-blown amber glass perfume bottle named EL POPIS shaped like a Don Julio tequila bottle, agave plant etched in the glass, cork stopper tied with raw twine, aged parchment label with gold foil lettering, sitting on a weathered oak bar, blurred agave field visible through a dusty cantina window, warm golden-hour light raking across the glass, macro lens, ultra-realistic, 8K, shallow depth of field, warm amber and earth tones."
 
-OUTPUT FORMAT:
-[Visual description paragraph]
-
-**Aspect ratio:** [e.g. 1:1 for Instagram, 16:9 for wallpaper, 4:5 for portrait, 3:2 for landscape]
-**Works best in:** [e.g. Midjourney, DALL-E 3, Gemini Image, Stable Diffusion XL]
-**Midjourney suffix (optional):** --ar [ratio] --style raw --v 6
-
-Output ONLY the image prompt. No preamble. No explanation. The user pastes this and gets their image.`;
+Output ONLY the image prompt paragraph. No preamble.`;
 }
 
 /* ─── MODEL-AWARE META PROMPT ───────────────── */
@@ -777,7 +665,7 @@ export default function GoatmodePage() {
 
   /* Refs */
   const chatEndRef   = useRef<HTMLDivElement>(null);
-  const chatInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const pasteCtxRef  = useRef('');
 
@@ -856,11 +744,10 @@ export default function GoatmodePage() {
 
     try {
       // ── PASS 1: Generate draft silently (stay on thinking screen) ──
-      // Pass 1 uses extended thinking — Claude reasons about the task before writing
+      // Pass 1: generate draft (fast, no extended thinking)
       const draft = await streamFetch(userContent, sysPrompt, (full) => {
         draftFull = full;
-        // Silent — no UI update. User sees THINKING_LINES the whole time.
-      }, true);
+      });
       const draftText = draft || draftFull;
       if (!draftText || draftText.length < 80) throw new Error('Draft too short');
 
@@ -1377,6 +1264,18 @@ export default function GoatmodePage() {
               </div>
             </div>
 
+            {/* Target model selector */}
+            <div className="gm-target-selector">
+              <span className="gm-target-selector__label">BUILD FOR</span>
+              {([['claude','Claude'],['gpt4','ChatGPT'],['gemini','Gemini']] as [TargetModel,string][]).map(([m,label]) => (
+                <button
+                  key={m}
+                  className={`gm-target-btn ${targetModel === m ? 'gm-target-btn--active' : ''}`}
+                  onClick={() => { setTargetModel(m); targetModelRef.current = m; }}
+                >{label}</button>
+              ))}
+            </div>
+
             {/* CTA button */}
             <button
               className="gm-btn-primary"
@@ -1507,13 +1406,14 @@ export default function GoatmodePage() {
             </div>
 
             <div className="gm-chat__input-row">
-              <input
+              <textarea
                 ref={chatInputRef}
                 className="gm-chat__input"
                 placeholder="Type your answer…"
                 value={chatInput}
+                rows={3}
                 onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleAnswer(chatInput); }}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAnswer(chatInput); } }}
               />
               <button className="gm-chat__send" onClick={() => handleAnswer(chatInput)}>→</button>
             </div>

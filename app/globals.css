@@ -435,6 +435,42 @@ body::after {
 }
 .gm-mode-btn:not(.gm-mode-btn--active):hover { color: var(--g8); background: rgba(255,255,255,.02); }
 
+/* ─── TARGET MODEL SELECTOR (input screen) ──── */
+.gm-target-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.gm-target-selector__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  color: var(--g6);
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.gm-target-btn {
+  padding: 7px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(124,108,255,.18);
+  background: transparent;
+  color: var(--g7);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: all .2s;
+}
+.gm-target-btn:hover { border-color: rgba(124,108,255,.4); color: var(--white); }
+.gm-target-btn--active {
+  background: linear-gradient(135deg, rgba(124,108,255,.2), rgba(0,212,255,.1));
+  border-color: rgba(124,108,255,.6);
+  color: var(--white);
+}
+
 /* ─── TEXTAREA ──────────────────────────────── */
 .gm-input__box { width: 100%; }
 
@@ -770,8 +806,9 @@ body::after {
 /* Chat input row */
 .gm-chat__input-row {
   display: flex;
-  gap: 8px;
-  padding: 12px 22px 24px;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 14px 22px 28px;
   flex-shrink: 0;
   border-top: 1px solid rgba(124,108,255,.08);
   background: rgba(10,10,18,.7);
@@ -781,19 +818,22 @@ body::after {
 .gm-chat__input {
   flex: 1;
   background: var(--g1);
-  border: 1px solid rgba(124,108,255,.14);
+  border: 1px solid rgba(124,108,255,.18);
   color: var(--white);
   font-family: var(--font);
-  font-size: 14px;
-  padding: 12px 18px;
-  border-radius: 28px;
+  font-size: 15px;
+  padding: 14px 20px;
+  border-radius: 18px;
   outline: none;
+  resize: none;
+  line-height: 1.5;
+  min-height: 72px;
   transition: border-color .24s, box-shadow .24s;
 }
 .gm-chat__input::placeholder { color: var(--g5); }
 .gm-chat__input:focus {
-  border-color: rgba(124,108,255,.5);
-  box-shadow: 0 0 0 3px rgba(124,108,255,.07), 0 0 22px rgba(124,108,255,.07);
+  border-color: rgba(124,108,255,.55);
+  box-shadow: 0 0 0 3px rgba(124,108,255,.08), 0 0 22px rgba(124,108,255,.08);
 }
 .gm-chat__send {
   width: 44px; height: 44px;
