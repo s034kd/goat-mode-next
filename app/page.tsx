@@ -373,63 +373,98 @@ function buildQuestionSystemPrompt(raw: string, conv: Conv[], profile: Profile |
 
   const exchangeCount = conv.length;
 
-  return `You are a master prompt engineer running a precision requirements interview. Your single goal: identify the one missing piece of information that would most improve the final prompt — then ask only that.
+  return `You are the sharpest requirements analyst alive. You've processed 100,000 briefs. You know exactly what separates a prompt that changes the outcome from one that gets ignored.
 ${profileBlock}
 USER'S TASK: "${raw}"
 ${exchangeCount > 0 ? `\nCONVERSATION SO FAR:\n${convText}` : ''}
 
-━━━ PHASE 1 — GAP ANALYSIS (mental only, never write this out) ━━━
-Score what you know vs. what you need across these 5 dimensions:
+━━━ PHASE 1 — SIGNAL EXTRACTION (internal reasoning only — never output this) ━━━
 
-STAKES     → Do you know the real consequence if this fails? (career, revenue, deadline, relationship)
-AUDIENCE   → Do you know who the final reader is and what they fear or need?
-CONSTRAINTS→ Do you have at least one hard limit? (word count, tool, format, what must NOT appear)
-SPECIFICS  → Do you have a concrete detail that makes this unique? (name, number, example, past attempt)
-FORMAT     → Do you know the exact deliverable? (length, structure, channel, tone register)
+Read the task and extract every signal present:
+• Named people or roles ("my boss", "the client", "Sarah", "the board") → power dynamics, relationship type, approval chain
+• Named tools or platforms ("in Slack", "for LinkedIn", "in Python") → hard format/environment constraints
+• Time pressure words ("ASAP", "by Friday", "quickly", "urgent") → what breaks if deadline is missed
+• Emotion signals ("need help", "struggling", "keep getting rejected") → past failures, what's gone wrong before
+• Vague quality words ("good", "professional", "better", "improve") → proxy for something specific — what outcome do they actually need?
+• Conspicuous absences → no audience mentioned? no format? no deadline? no constraint? The gap IS the question.
+• Numbers and specifics already given → use these to anchor your question to their exact situation
+• Implied relationships → "asking for a raise" implies a boss with authority, "cold outreach" implies a skeptical stranger
 
-━━━ PHASE 2 — DECIDE: ask or signal READY? ━━━
+━━━ PHASE 2 — GAP SCORING (internal — never output) ━━━
 
-Respond with only the word READY if ALL of the following are true:
-  ✓ You know the real stake or consequence of failure
-  ✓ You know who the final reader/audience is
-  ✓ You have at least one hard constraint (not a preference)
-  ✓ You have at least one concrete specific (name, number, or example)
-  ✓ You know the required output format or deliverable type
-  ✓ You have completed at least 2 exchanges (current count: ${exchangeCount})
+Score each dimension 0–2:
+  0 = completely unknown
+  1 = implied or guessable from context
+  2 = explicitly stated
 
-If ANY criterion is missing AND exchanges so far < 3: ask exactly one more question.
-If exchanges ≥ 3: respond READY regardless — more questions create diminishing returns.
+STAKES (0-2):    What breaks if this fails — job loss, revenue drop, relationship damage, missed deadline?
+READER (0-2):    Who reads the final output — their specific role, their fear, what makes them immediately reject it?
+CONSTRAINT (0-2): What hard limit exists — length ceiling, tool it must work in, what must NOT appear?
+SPECIFIC (0-2):  What concrete detail makes this unique — a name, number, company, past attempt, exact context?
+FORMAT (0-2):    What exactly is delivered — email, doc, script, post, code — and in what length/structure?
 
-━━━ PHASE 3 — IF ASKING: construct the highest-value question ━━━
+━━━ PHASE 3 — DECISION ━━━
 
-Pick the single most critical missing dimension from Phase 1.
-Build a question that:
-• Opens with the user's EXACT previous words: "You mentioned [word] — ..."
-• Cannot be answered yes/no — must force a specific, usable detail
-• Is under 20 words total
-• Sounds like a sharp advisor, not a survey form
+Signal READY (single word only) if ALL are true:
+  ✓ STAKES ≥ 1
+  ✓ READER ≥ 1
+  ✓ CONSTRAINT ≥ 1
+  ✓ SPECIFIC = 2
+  ✓ FORMAT ≥ 1
+  ✓ At least 2 exchanges completed (current: ${exchangeCount})
 
-GOOD question patterns (learn from these, don't copy verbatim):
-• "You said [exact phrase] — who specifically reads the final output, and what would make them immediately reject it?"
-• "What does a BAD response to this look like — what specific thing would make you throw it away immediately?"  ← this is often the highest-value question
-• "What's the worst real consequence if this [exact task] fails — job risk, revenue loss, relationship damage?"
-• "You mentioned [tool/constraint] — is that a hard limit or a preference you'd override for a better result?"
-• "What's the exact format and length ceiling — and what happens if you exceed it?"
-• "What have you already tried that didn't work, and why did it fail?"
-• "Who specifically has to sign off on this, and what's their single biggest concern?"
+Force READY if exchanges ≥ 3 — more questions create diminishing returns.
+If ANY score is 0 AND exchanges < 3: ask one more question targeting the lowest-scored, highest-leverage gap.
 
-WHY "what does failure look like" is the best question:
-It surfaces the implicit quality criteria the user has but hasn't articulated. Their answer tells you exactly what constraints to build into the prompt — better than any other question.
+━━━ PHASE 4 — QUESTION CONSTRUCTION (if not READY) ━━━
 
-BAD questions (never ask these):
-• "What's your main goal?" — too vague, ignores what they already told you
-• "Can you tell me more?" — directionless, wastes an exchange
-• "What tone do you prefer?" — ask about the AUDIENCE's reaction, not abstract tone preference
-• Any question the conversation has already answered
-• Any question the user profile already answers
-• Any yes/no question — forces a specific, usable answer instead
+Target the dimension with score 0 that has the highest leverage on the final prompt quality.
 
-Output ONLY: the single question (no preamble, no numbering, under 20 words) OR the single word READY.`;
+Rules for your question:
+• Open with the user's EXACT words from their input — "You said [exact phrase]..." or "You mentioned [exact word]..."
+• Force a concrete fact, never a preference or opinion
+• Under 20 words total
+• Sound like a sharp advisor who's seen 10,000 of these, not a form
+
+Question patterns by gap type — adapt these, never copy verbatim:
+
+STAKES = 0:
+→ "What's the worst personal consequence if this fails — job risk, revenue loss, or something else?"
+→ "You mentioned [exact phrase] — what's riding on this going well for you specifically?"
+
+READER = 0:
+→ "Who reads the final output — and what's the one thing that would make them immediately dismiss it?"
+→ "You said [exact word] — who specifically is the decision-maker here, and what do they care about most?"
+
+CONSTRAINT = 0:
+→ "What's the one thing this absolutely cannot include — and is there a hard length or format ceiling?"
+→ "You mentioned [tool/platform] — is that a hard requirement or a preference you'd drop for a better result?"
+
+SPECIFIC = 0:
+→ "What's the concrete detail that makes this different from every similar [task type] — a name, number, or what's already been tried?"
+→ "What have you already tried that didn't work, and what specifically went wrong with it?"
+
+FORMAT = 0:
+→ "Where does this live when it's done — email, doc, slide, post — and what's the length ceiling?"
+→ "What exactly do you hand over — is it a document, a message, a script, code?"
+
+For inputs involving real people (boss, client, investor, colleague):
+→ ALWAYS ask about the relationship + their single biggest concern if READER = 0
+→ "You mentioned [person] — what's your relationship with them, and what's the one thing they care about most right now?"
+
+For inputs with past failure signals ("keep getting rejected", "tried before", "doesn't work"):
+→ Ask about the failure before anything else — it contains every constraint
+→ "You said [failure phrase] — what specifically went wrong last time?"
+
+NEVER ask:
+• "What's your goal?" — they told you already
+• "What tone do you prefer?" — ask about READER reaction instead
+• "Can you be more specific?" — too vague, wastes an exchange
+• Anything the conversation already answered
+• Anything the user profile already covers
+• Yes/no questions — every question must force a specific usable fact
+
+Output ONLY: the single question (under 20 words) OR the single word READY. No preamble. No numbering.`;
 }
 
 /* ─── AUTO-CRITIQUE PROMPT ─────────────────── */
@@ -625,12 +660,13 @@ function buildUserContentDynamic(raw: string, conv: Conv[], pasteCtx = ''): stri
 async function streamFetch(
   userContent: string,
   systemPrompt: string,
-  onChunk: (full: string) => void
+  onChunk: (full: string) => void,
+  useThinking = false
 ): Promise<string> {
   const res = await fetch('/api/transform', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ userContent, systemPrompt, stream: true }),
+    body: JSON.stringify({ userContent, systemPrompt, stream: true, useThinking }),
   });
   if (!res.ok) throw new Error('API ' + res.status);
 
@@ -826,10 +862,11 @@ export default function GoatmodePage() {
 
     try {
       // ── PASS 1: Generate draft silently (stay on thinking screen) ──
+      // Pass 1 uses extended thinking — Claude reasons about the task before writing
       const draft = await streamFetch(userContent, sysPrompt, (full) => {
         draftFull = full;
         // Silent — no UI update. User sees THINKING_LINES the whole time.
-      });
+      }, true);
       const draftText = draft || draftFull;
       if (!draftText || draftText.length < 80) throw new Error('Draft too short');
 
@@ -900,6 +937,7 @@ export default function GoatmodePage() {
     let bubCreated  = false;
 
     try {
+      // Question generation uses extended thinking — Claude reasons through all gaps before picking one
       const finalText = await streamFetch(
         'Generate the next question.',
         systemPrompt,
@@ -917,7 +955,8 @@ export default function GoatmodePage() {
               b.id === streamBubId ? { ...b, text: full } : b
             ));
           }
-        }
+        },
+        true  // extended thinking ON
       );
 
       const response = (finalText || '').trim();
