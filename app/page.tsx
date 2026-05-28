@@ -127,23 +127,33 @@ function detectType(t: string): string {
 /* ─── PROMPT SCORE ──────────────────────────── */
 function calcScore(prompt: string): number {
   let s = 7.0;
-  const len = prompt.length;
-  if (len > 300)  s += 0.3;
-  if (len > 600)  s += 0.3;
-  if (len > 900)  s += 0.2;
-  if (len > 1400) s += 0.1;
-  // Reward clean structured prompts
-  if (/Act as|You are a/.test(prompt))              s += 0.2; // has persona
-  if (/\*\*[A-Z][^*]+\*\*/.test(prompt))            s += 0.2; // has bold headers
-  if (/Before you write|Before writing/i.test(prompt)) s += 0.3; // has pre-work
-  if (/Requirements:/i.test(prompt))                s += 0.2; // has requirements
-  if (/Begin your response with/i.test(prompt))     s += 0.3; // has output primer
-  if (/Do NOT|must not|never/i.test(prompt))        s += 0.1; // has hard constraints
-  if (/\d+%/.test(prompt))                          s += 0.15; // has metrics
-  if (/\d+ words|\d+-word/i.test(prompt))           s += 0.1; // has length spec
-  // Penalise XML tags — they break paste-into-ChatGPT
+  const trimmed = prompt.trim();
+  const words = trimmed.split(/\s+/).length;
+
+  // ── Length sweet spot: 50–130 words ──
+  if (words >= 40 && words < 60)   s += 0.2;
+  if (words >= 60 && words <= 130) s += 0.5;  // optimal range
+  if (words > 130 && words <= 200) s += 0.2;
+  if (words > 200)                 s -= 0.1;  // too long
+
+  // ── Reward DIRECT REQUEST format (the right format) ──
+  if (/^(Write|Create|Draft|Generate|Build|Design|Explain|Analyze|Research|Give me|Make me|Produce|Develop)/i.test(trimmed)) s += 0.6; // starts with action verb
+  if (/Start with:/i.test(prompt))            s += 0.4; // has output anchor — best signal
+  if (/\([^)]{5,50}\)/.test(prompt))         s += 0.2; // has inline constraints
+  if (/\d+%|\$[\d,.]+|\d+ words|\d+-word|\d+ emails|\d+ days|\d+ lines/i.test(prompt)) s += 0.2; // has specific numbers
+  if (/Do NOT|must not|no [a-z]+,/i.test(prompt)) s += 0.1; // has hard constraints
+
+  // ── PENALISE old format (causes ChatGPT to output another prompt) ──
+  if (/^Act as|^You are a/i.test(trimmed))   s -= 0.6; // role-injection opener
+  if (/Act as /i.test(prompt))               s -= 0.2; // role injection anywhere
+  if (/Requirements:|Context:|Format:|Before you write:/i.test(prompt)) s -= 0.3; // section headers
+  const boldHeaders = (prompt.match(/\*\*[A-Z][^*]+\*\*/g) || []).length;
+  if (boldHeaders > 1) s -= boldHeaders * 0.1; // multiple bold headers
+
+  // ── Penalise XML tags — they break paste-into-ChatGPT ──
   const xmlCount = (prompt.match(/<[a-z_]+>/g) || []).length;
-  if (xmlCount > 0) s -= xmlCount * 0.15;
+  if (xmlCount > 0) s -= xmlCount * 0.2;
+
   return Math.min(9.9, Math.max(7.0, +s.toFixed(1)));
 }
 
@@ -168,31 +178,45 @@ Output ONLY the improved prompt. Nothing else.`;
 
 /* ─── META PROMPT ───────────────────────────── */
 function buildMetaPrompt(): string {
-  return `You are an expert at writing AI prompts that get IMMEDIATE results. The user will paste your output directly into ChatGPT, Claude, or Gemini and expect to get their final output — not another prompt, not a template, not instructions to follow. Just the actual thing they want.
+  return `You are an expert at writing AI prompts that produce the ACTUAL OUTPUT immediately. The user will paste your output directly into ChatGPT, Claude, or Gemini — they expect to get their deliverable instantly. Not a template. Not a framework. Not instructions. The actual thing.
 
-THE GOLDEN RULE: Write a DIRECT REQUEST, not a set of instructions.
+THE ONE RULE: Write a DIRECT REQUEST. One paragraph. Paste and go.
 
-BAD (system-prompt style — causes AI to output another prompt or template):
-"Act as a copywriter. Your task is to write a brand story. Requirements: — No fluff — Under 150 words"
+THE FORMAT:
+[Action verb] [exact deliverable] for [exact reader/purpose] ([constraint 1]), ([constraint 2]). [Specific detail — name, number, context]. [Outcome you want]. Start with: "[exact first 6–8 words of the output]."
 
-GOOD (direct request — AI immediately produces the output):
-"Write me a 120-word brand story for a perfume called EL POPIS that looks like a tequila bottle. It's a gift for a Mexican guy who loves tequila — make him feel it was made for him. Use Mexican craft heritage as the hook. No words like 'sensual', 'mysterious', or 'journey'. Start with: 'EL POPIS isn't a perfume.'"
+REAL EXAMPLES ACROSS DOMAINS:
 
-THE DIFFERENCE:
-— Start with "Write me", "Give me", "Create", "Generate" — NOT "Act as" or "Your task is"
-— Weave all context and constraints INTO the request naturally — no bullet lists of Requirements
-— Include who it's for and what reaction you want as part of the ask
-— Hard constraints go in parentheses mid-sentence: "under 120 words", "no bullet points", "in Spanish"
-— End with the exact first words you want: "Start with: '[exact words]'"
-— MAX 100 words. The best prompts are direct and specific, not long.
+NEGOTIATION → "Write a raise-request email to Sarah (my CFO) asking for exactly 20% — not a range, exactly 20. I closed our biggest deal ever ($2.3M) in March. Under 100 words. The email's only job: get a 30-minute meeting before Q3 reviews. No 'I feel I deserve', no salary comparisons. Start with: 'Sarah, I'd like 30 minutes'"
 
-ADDITIONAL RULES:
-— NO section headers (no "Context:", "Requirements:", "Format:", "Before you write:")
-— NO "Act as" — weave the expertise into the ask if needed: "Write like a seasoned negotiator..."
-— NO XML tags
-— Output ONLY the finished prompt — nothing else
+MARKETING → "Write 3-email cold outreach from Acme to VP Operations at 200-person logistics companies still tracking routes in spreadsheets. Hook is their pain (real-time rerouting costs), not our features. Each email under 80 words. Subject lines that earn the open. Start with the subject line for email 1."
 
-Now write a direct, specific, paste-and-get-output prompt for this task:`;
+CODING → "Write a TypeScript function that debounces an async API call, handles mid-flight cancellation with AbortController, returns latest result only. Handle network errors and timeouts separately. Include a usage example with a search input. Start with: '// Architecture:'"
+
+ANALYSIS → "Analyze why our Q3 churn jumped 4% despite record NPS — conclusion first, evidence second. 3 root causes ranked by impact. End with 2 specific actions, each with an owner and 30-day success metric. Start with: 'The core finding is:'"
+
+STRATEGY → "Create a 90-day go-to-market strategy for launching [product] to [audience]. Identify the one binding constraint that must be solved first. Then top 3 priorities with owners and success metrics. No generic frameworks — what specifically to do in week 1. Start with: 'The binding constraint is:'"
+
+EMAIL → "Draft a cold email to [decision-maker role] at [company type] about [value prop] (under 90 words), (one ask only). Hook: a specific insight about their world, not a feature. End with one specific, easy yes. Start with: '[hook line]'"
+
+THE RULES — never break these:
+— Start with an action verb: Write / Create / Draft / Generate / Build / Design / Explain / Analyze — NEVER "Act as" or "You are"
+— Name the EXACT deliverable, not "content" or "a response"
+— Include who it's FOR and what matters to them
+— Put constraints inline: "(under 120 words)", "(no bullet points)", "(formal tone)"
+— Use the most specific detail from the user's context: a name, number, company, quote, past failure
+— End with the exact first words of the output: Start with: "[exact words]"
+— 60–130 words total — specific, not long
+— NO section headers (Requirements:, Context:, Format:, Before you write:)
+— NO "Act as" or "You are a" anywhere
+— NO XML tags or angle brackets
+— NO bullet lists of rules — weave constraints into the request naturally
+
+THE USER'S FULL CONTEXT (raw task + their answers to clarifying questions) IS BELOW.
+Extract every specific detail: names, numbers, constraints, format, past failures, audience.
+Compress it into ONE direct request paragraph that gets the output in a single paste.
+
+Now write the direct request:`;
 }
 
 /* ─── BUILD QUESTION SYSTEM PROMPT ─────────── */
@@ -356,14 +380,15 @@ function buildMetaPromptForModel(model: TargetModel, profile: Profile | null, ty
   let base = buildMetaPrompt();
 
   if (profile) {
-    const profileContext = `\nUSER CONTEXT: ${profile.role} in ${profile.industry}. Tools they use: ${profile.tools}. Their core goal: ${profile.goals}. Tailor every section to this context.\n`;
-    base = base.replace('Transform this into a master prompt:', profileContext + '\nTransform this into a master prompt:');
+    const profileContext = `\nUSER PROFILE (already known — use this to sharpen specifics): ${profile.role} in ${profile.industry}. Tools: ${profile.tools}. Core goal: ${profile.goals}. Tailor names, contexts, and constraints to this person's world.\n`;
+    base = base.replace('Now write the direct request:', profileContext + '\nNow write the direct request:');
   }
 
+  // Model notes — ONLY about how the target model receives prompts, never change the format rules
   if (model === 'gpt4') {
-    base += '\n\nFORMAT NOTE FOR GPT-4o: Use markdown headers (## Section) for any sections. No XML tags.';
+    base += '\n\nNOTE: This prompt will be pasted as a USER MESSAGE into ChatGPT (not a system prompt). Make it read as a direct human request — not AI instructions. The direct-request format already handles this correctly.';
   } else if (model === 'gemini') {
-    base += '\n\nFORMAT NOTE FOR GEMINI: Start with conversational framing ("You are..."). Use bullet points. End with "Think step by step before responding."';
+    base += '\n\nNOTE: This prompt will be pasted as a USER MESSAGE into Gemini. Keep it as a direct human request. Gemini responds best to specific, concrete asks — which the direct-request format already provides. Do not add "Think step by step" or role-injection language.';
   }
 
   return base;
@@ -460,42 +485,38 @@ function getQuality(type: string): string {
 }
 
 function buildOfflinePrompt(raw: string, conv: Conv[], type: string): string {
-  const role = getRole(type);
-  const contextLines = conv.map(c => `— ${c.a}`).join('\n');
+  // Extract useful answers from the conversation
+  const answers = conv.map(c => c.a).filter(a => a && a.trim().length > 3);
+  const ctxNote = answers.length > 0 ? ' ' + answers.slice(0, 3).join('. ') + '.' : '';
 
-  return `Act as ${role}
+  // Each template is a direct request — paste into ChatGPT/Claude/Gemini → get the output immediately
+  const templates: Record<string, string> = {
+    negotiation: `Write a raise-request email (under 120 words) for this situation: "${raw}".${ctxNote} The email's only job is to get a 30-minute meeting — not to win the raise in the email. No apologies, no salary comparisons, no ranges. Start with: "I'd like 30 minutes with you"`,
 
-**Context:**
-Task: "${raw}"
-${contextLines ? contextLines : ''}
+    communication: `Write a clear, direct message for this situation: "${raw}".${ctxNote} Lead with the core point in the first sentence. Keep the relationship intact. No buried headlines, no passive accountability. Start with the single most important sentence.`,
 
-**Your task:**
-${getObjective(type, raw)}
+    marketing: `Write direct-response copy for: "${raw}".${ctxNote} Hook earns the next sentence in the first 8 words. No "game-changer" or vague claims. End with one specific CTA. Start with the hook line.`,
 
-**Before you write:**
-${type === 'coding' ? 'Write all function signatures first. List the 3 most likely runtime failures. Then implement.' :
-  type === 'analysis' ? 'Form 3 competing hypotheses. State what would disprove each. Only then examine the data.' :
-  type === 'negotiation' ? 'Map the other party\'s BATNA and the 2 sentences that end this badly before writing.' :
-  type === 'strategy' ? 'Find the one binding constraint that, if removed, changes everything. Sequence reversible decisions first.' :
-  type === 'creative' ? 'Generate the 3 most obvious directions. Reject them all. Then write what exists nowhere else.' :
-  'Identify the reader\'s unstated question. Write the ending first, then build backwards.'}
+    coding: `Write production-quality code for: "${raw}".${ctxNote} Handle edge cases. No placeholders, no pseudocode, no silent exception swallowing. Start with: "// Architecture:" (2-line overview), then the full implementation, then a usage example.`,
 
-**Requirements:**
-${getConstraints(type)}
+    analysis: `Analyze this: "${raw}".${ctxNote} Conclusion first, evidence second. Identify the 3 most likely root causes ranked by impact. End with 2 specific recommendations — each with an owner and a 30-day success metric. Start with: "The core finding is:"`,
 
-**Format:**
-${getFormat(type)}
+    strategy: `Create a concrete strategy for: "${raw}".${ctxNote} Find the one binding constraint first — fix that before everything else. Then top 3 priorities with owners and success metrics. No generic frameworks. Start with: "The binding constraint is:"`,
 
-**Your output passes only if:**
-${getQuality(type)}
+    creative: `Generate 3 distinct creative directions for: "${raw}".${ctxNote} Reject the obvious first idea. Each direction needs: a name, a concept in one sentence, and the rationale. Make one direction safe, one surprising, one risky. Start with: "Territory 1:"`,
 
-Begin your response with: "${
-  type === 'coding' ? '// Architecture overview:' :
-  type === 'analysis' ? 'The core finding is:' :
-  type === 'email' || type === 'negotiation' || type === 'communication' ? 'Subject:' :
-  type === 'strategy' ? 'The binding constraint is:' :
-  'Here is'
-}"`;
+    education: `Explain this so a smart 12-year-old understands: "${raw}".${ctxNote} Lead with the single most important concept. Use one strong analogy. Pre-empt the 2 most common misconceptions. Build complexity only after the foundation is solid.`,
+
+    writing: `Write a complete, publication-ready piece for: "${raw}".${ctxNote} Commanding opening that demands the second sentence. Every paragraph earns its place. Resonant close — not a summary. Include a suggested headline. Start with the opening line.`,
+
+    research: `Research and synthesize: "${raw}".${ctxNote} Conclusion first. 5 key findings max, each specific and actionable. Distinguish analysis from summary. End with decision implications — what to actually do, not just what was found. Start with: "The key finding is:"`,
+
+    email: `Write a send-ready email (under 100 words) for: "${raw}".${ctxNote} Subject line first. One clear ask only — no multiple questions. No lengthy preamble, no apologetic opener. End with one specific, easy-to-answer ask. Start with: "Subject:"`,
+
+    image: `Photorealistic [style for: "${raw}"], [main subject + specific visual details${ctxNote ? ': ' + ctxNote : ''}], [setting and background], [lighting type], [mood], [camera style], ultra-realistic, 8K, shallow depth of field. --ar 16:9`,
+  };
+
+  return templates[type] || `Write a complete, expert-level response to: "${raw}".${ctxNote} Be specific and direct. Lead with the most important information. End with a clear next action. Start with the first substantive sentence.`;
 }
 
 /* ─── BUILD USER CONTENT ────────────────────── */
@@ -912,7 +933,7 @@ export default function GoatmodePage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           userContent: `Refine this prompt per the instruction: "${instruction}"\n\nOriginal:\n${getActiveText()}`,
-          systemPrompt: 'You are a prompt engineer. Apply the instruction to refine the prompt. Keep the XML structure. Output ONLY the refined prompt — no explanation.',
+          systemPrompt: 'You are a prompt engineer who specializes in direct-request prompts. Apply the refinement instruction to the prompt. Preserve the core format: starts with an action verb (Write/Create/Generate/Draft/Analyze), constraints woven inline in parentheses, ends with Start with: "[exact words]". NO XML tags, NO section headers (Requirements:/Context:/Format:), NO "Act as" or "You are a". Output ONLY the refined prompt — nothing else.',
         }),
       });
       const data = await res.json();
@@ -946,8 +967,8 @@ export default function GoatmodePage() {
     const baseMetaPrompt = buildMetaPromptForModel(targetModelRef.current, profileRef.current);
     const userContent    = buildUserContentDynamic(rawInput, conversation, pasteCtxRef.current);
 
-    const sysA = baseMetaPrompt + '\n\nVARIANT INSTRUCTION: Make this MORE comprehensive. Add more specific steps, explicit examples, and deeper constraints. Push specificity further.';
-    const sysB = baseMetaPrompt + '\n\nVARIANT INSTRUCTION: Make this TIGHTER. Cut 30% of words. Every sentence earns its place. Zero redundancy. Maximum precision.';
+    const sysA = baseMetaPrompt + '\n\nVARIANT INSTRUCTION: Make this MORE detailed — add more specific constraints, more concrete details (names, numbers, examples) woven directly into the request. More specific = better output. Stay in direct-request format. No new section headers. Still end with Start with: "[exact words]".';
+    const sysB = baseMetaPrompt + '\n\nVARIANT INSTRUCTION: Make this TIGHTER — cut 30% of words. Zero redundancy. Every constraint must earn its place. Still starts with action verb, still ends with Start with: "[exact words]". Direct-request format only. No XML, no section headers.';
 
     try {
       const [resA, resB] = await Promise.all([
