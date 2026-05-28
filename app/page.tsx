@@ -149,46 +149,50 @@ function calcScore(prompt: string): number {
 
 /* ─── IMPROVE-MODE SYSTEM PROMPT ────────────── */
 function buildImprovePrompt(): string {
-  return `You are an elite prompt engineer. The user has given you a weak prompt. Rebuild it into a short, sharp, paste-ready version that gets great output from any AI.
+  return `You are an expert at writing AI prompts that produce immediate results. The user has a weak prompt. Rewrite it as a direct request that gets the actual output when pasted into ChatGPT, Claude, or Gemini.
 
-RULES:
-- MAX 120 words. Shorter is sharper.
-- NO XML tags. No angle brackets. Plain text only.
-- Output ONLY the improved prompt — no explanation, no "here is the improved version."
+THE RULE: Write a DIRECT REQUEST, not instructions.
+BAD: "Act as X. Your task is Y. Requirements: — rule 1 — rule 2"
+GOOD: "Write me [specific thing] for [specific person/purpose]. [constraint in parentheses]. [another constraint]. Start with: '[exact first words].'"
 
 HOW TO IMPROVE:
-1. Replace vague verbs ("write a good email") with specific ones ("write a 100-word email to X to achieve Y")
-2. Add a specific persona (1 line: "Act as [expert with one concrete credential]")
-3. Replace soft constraints ("be concise") with hard ones ("under 120 words — the reader stops at paragraph 2")
-4. Add who reads the final output and what would make them reject it
-5. End with: "Begin your response with: [exact first 6-8 words]"
+1. Start with "Write me", "Give me", "Create", "Generate" — not "Act as"
+2. Bake ALL context directly into the request sentence
+3. Put constraints inline: "(under 120 words)", "(no bullet points)", "(formal tone)"
+4. Remove all section headers — Requirements:, Context:, Format: etc.
+5. End with: "Start with: '[exact first 6 words you want]'"
+6. MAX 100 words total
 
-Output ONLY the improved prompt (120 words max).`;
+Output ONLY the improved prompt. Nothing else.`;
 }
 
 /* ─── META PROMPT ───────────────────────────── */
 function buildMetaPrompt(): string {
-  return `You are an elite prompt engineer. Turn the user's task into a short, sharp prompt that gets a great output when pasted into any AI. Paste-and-go. No setup required.
+  return `You are an expert at writing AI prompts that get IMMEDIATE results. The user will paste your output directly into ChatGPT, Claude, or Gemini and expect to get their final output — not another prompt, not a template, not instructions to follow. Just the actual thing they want.
 
-RULES (non-negotiable):
-- MAX 120 words total. Shorter is better. Every word must earn its place.
-- NO XML tags. No angle brackets. Plain text only.
-- No preamble, no explanation — output ONLY the prompt itself.
+THE GOLDEN RULE: Write a DIRECT REQUEST, not a set of instructions.
 
-STRUCTURE (use this exact order, keep each section to 1-2 lines):
+BAD (system-prompt style — causes AI to output another prompt or template):
+"Act as a copywriter. Your task is to write a brand story. Requirements: — No fluff — Under 150 words"
 
-Line 1: "Act as [specific expert with one concrete credential]."
-Line 2-3: Context — who reads this, what's at stake, any hard constraint from the user's input.
-Line 4: "Your task: [action verb] [specific output] for [reader + their concern]."
-Line 5 (complex tasks only): "Before writing: [one task-specific thinking step]."
-Lines 6-8: 2-3 requirements as dashes — "— [rule] — [why it matters]"
-Last line: "Begin your response with: [exact first 6-8 words]"
+GOOD (direct request — AI immediately produces the output):
+"Write me a 120-word brand story for a perfume called EL POPIS that looks like a tequila bottle. It's a gift for a Mexican guy who loves tequila — make him feel it was made for him. Use Mexican craft heritage as the hook. No words like 'sensual', 'mysterious', or 'journey'. Start with: 'EL POPIS isn't a perfume.'"
 
-EXAMPLES:
-✗ Bad: "Write a high-quality professional email that is concise and comprehensive."
-✓ Good: "Act as an email strategist. Write a 100-word cold email to a skeptical CFO who ignored the last 3 pitches, to get a 20-min call this week. — No fluff, no "I hope this finds you well" — they delete emails that start with it. Begin with: 'Subject: [specific hook about their company]'"
+THE DIFFERENCE:
+— Start with "Write me", "Give me", "Create", "Generate" — NOT "Act as" or "Your task is"
+— Weave all context and constraints INTO the request naturally — no bullet lists of Requirements
+— Include who it's for and what reaction you want as part of the ask
+— Hard constraints go in parentheses mid-sentence: "under 120 words", "no bullet points", "in Spanish"
+— End with the exact first words you want: "Start with: '[exact words]'"
+— MAX 100 words. The best prompts are direct and specific, not long.
 
-Transform this into a master prompt (120 words max):`;
+ADDITIONAL RULES:
+— NO section headers (no "Context:", "Requirements:", "Format:", "Before you write:")
+— NO "Act as" — weave the expertise into the ask if needed: "Write like a seasoned negotiator..."
+— NO XML tags
+— Output ONLY the finished prompt — nothing else
+
+Now write a direct, specific, paste-and-get-output prompt for this task:`;
 }
 
 /* ─── BUILD QUESTION SYSTEM PROMPT ─────────── */
@@ -299,57 +303,28 @@ Output ONLY: the single question (under 20 words) OR the single word READY. No p
 
 /* ─── AUTO-CRITIQUE PROMPT ─────────────────── */
 function buildCritiquePrompt(type: string): string {
-  return `You are a ruthless prompt quality auditor. You have one job: find the weakest sections of this AI prompt and fix them.
+  void type;
+  return `You are a prompt quality auditor. Check this prompt against ONE rule and fix any violations.
 
-Evaluate against these 7 criteria — assign PASS or FAIL to each:
+THE ONLY RULE THAT MATTERS:
+When a user pastes this prompt into ChatGPT, Claude, or Gemini, does the AI immediately produce the final output (the email, the code, the image, the analysis) — or does it produce another prompt, a template, or meta-commentary?
 
-1. SPECIFICITY
-   FAIL if any section uses vague adjectives: "good", "professional", "high-quality", "comprehensive", "thorough", "appropriate", "excellent", "well-written". These words are invisible to an AI.
-   PASS if every instruction specifies exact behavior, length, format, or observable outcome.
+SIGNS THE PROMPT WILL FAIL (fix every one of these):
+1. Starts with "Act as" or "You are" → rewrite as a direct request starting with "Write me", "Generate", "Create", "Give me"
+2. Has section headers (Requirements:, Context:, Format:, Before you write:) → dissolve them into the request
+3. Has bullet lists of rules → weave the most important constraints inline: "(under 120 words)", "(no bullet points)"
+4. Has XML tags → remove entirely
+5. Vague words: "professional", "high-quality", "comprehensive" → replace with the specific observable thing
+6. Missing: exact word count, exact first words, specific reader and their concern
 
-2. OUTPUT_PRIMER
-   FAIL if the prompt does NOT end with the first exact words the AI should say.
-   PASS if the prompt ends with: 'Begin your response with: "[first 8-12 words calibrated to this task type: ${type}]"'
+REWRITE RULES:
+- MAX 100 words
+- Start with action verb: "Write me", "Give me", "Create", "Generate", "Draft"
+- All context and constraints flow naturally in prose or inline parentheses
+- End with: 'Start with: "[exact first 6-8 words of the output]"'
+- Zero XML, zero section headers, zero "Act as", zero meta-language
 
-3. CONSTRAINT_DEPTH
-   FAIL if any constraint does not explain WHY it exists for this specific task.
-   "Be concise" = FAIL. "Do not exceed 150 words — the reader stops reading at paragraph 3" = PASS.
-
-4. AUDIENCE_PRECISION
-   FAIL if the final reader is described only by job title without a specific fear, goal, or concern.
-   "A busy VP" = FAIL. "A VP who rejected the last 3 proposals because they lacked ROI specifics" = PASS.
-
-5. MEASURABLE_QUALITY
-   FAIL if any quality criterion uses adjectives instead of observable actions.
-   "The response is professional" = FAIL. "A first-time reader completes the task without asking a follow-up question" = PASS.
-
-6. MEMORY_ANCHOR
-   FAIL if the 3 most critical constraints do NOT appear at both the START and END of the prompt.
-   Key instructions buried only in the middle lose 30% of their effectiveness.
-   PASS if the critical constraints are restated in a final section at the end.
-
-7. PRE_WORK_MATCH
-   FAIL if the thinking step before writing is generic ("identify dependencies", "map the task").
-   PASS if it uses the task-specific protocol for: ${type}.
-   For CODING: signatures-first coverage pass, then implementation.
-   For ANALYSIS: 3 competing hypotheses + confidence levels (HIGH/MEDIUM/LOW) on every finding.
-   For WRITING: reader's unstated question + draft the ending first.
-   For NEGOTIATION: model BATNA + name 2 sentences that end this badly.
-
-8. NO_XML_TAGS
-   FAIL if the prompt contains ANY XML-style tags: <role>, <task>, <context>, <constraints>, or any angle-bracket sections.
-   PASS if the prompt uses plain English, bold headers (**Like This:**), or markdown bullet points only.
-   CRITICAL: XML tags in a user-facing prompt cause ChatGPT/Gemini to respond TO the tags instead of executing the task.
-
-For EVERY criterion marked FAIL:
-— Quote the specific section that fails (in quotes)
-— Write the complete replacement text
-
-Then output the COMPLETE revised prompt with every fix applied.
-CRITICAL OUTPUT RULES:
-- Output ONLY the revised prompt. No audit report. No preamble. No commentary.
-- Zero XML tags in the output. If any exist, replace them with plain-text equivalents.
-- The user will paste this directly into ChatGPT or Gemini and immediately get their output.`;
+Output ONLY the improved prompt. Nothing else.`;
 }
 
 /* ─── IMAGE-SPECIFIC META PROMPT ────────────── */
