@@ -424,21 +424,22 @@ body::after {
 
 .gm-output { padding:0 20px 80px; max-width:780px; margin:0 auto; width:100%; gap:18px; align-items:stretch; }
 
-/* ── Output topbar — floating pill buttons, no heavy container ── */
+/* ══════════════════════════════════════
+   OUTPUT TOPBAR — Clean action bar
+══════════════════════════════════════ */
 .gm-output__topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 0;
+  padding: 18px 0;
   position: sticky;
   top: 0;
-  /* Transparent — let the page show through */
-  background: linear-gradient(to bottom, rgba(9,8,15,.98) 80%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(9,8,15,.96);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   z-index: 10;
-  border-bottom: none;
-  gap: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -446,55 +447,64 @@ body::after {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: nowrap;
 }
 
-/* Floating pill base — glass look, no heavy bg */
+/* Ghost pill — clearly visible, clean */
 .gm-action-btn {
-  padding: 10px 22px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  color: var(--tx1);
+  height: 40px;
+  padding: 0 20px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.13);
+  color: rgba(220,215,245,.85);
   font-family: var(--font);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all .18s var(--easspring);
+  transition: all .16s var(--ease);
   border-radius: 100px;
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.25);
-  backdrop-filter: blur(12px);
+  gap: 7px;
+  letter-spacing: .01em;
 }
 .gm-action-btn:hover:not(:disabled) {
-  background: rgba(255,255,255,.11);
-  border-color: rgba(255,255,255,.2);
-  color: var(--tx0);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0,0,0,.3);
+  background: rgba(255,255,255,.13);
+  border-color: rgba(255,255,255,.25);
+  color: #fff;
+  transform: translateY(-1px);
 }
-.gm-action-btn:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
-.gm-action-btn:disabled { opacity: .3; cursor: not-allowed; }
-.gm-action-btn--done { color: var(--teal2); }
+.gm-action-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  background: rgba(255,255,255,.05);
+}
+.gm-action-btn:disabled { opacity:.28; cursor:not-allowed; }
 
-/* OPEN IN CLAUDE — filled pill, hero CTA */
+/* ✓ Copied state */
+.gm-action-btn--done {
+  color: var(--teal2);
+  border-color: rgba(94,160,160,.35);
+  background: rgba(94,160,160,.08);
+}
+
+/* OPEN IN CLAUDE — primary CTA, stands out */
 .gm-action-btn--claude {
+  height: 40px;
+  padding: 0 22px;
   background: var(--purple);
-  border-color: rgba(176,168,232,.35);
+  border: none;
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 4px 18px rgba(94,82,168,.38);
+  font-size: 14px;
+  box-shadow: 0 0 0 1px rgba(176,168,232,.3), 0 4px 16px rgba(94,82,168,.35);
 }
 .gm-action-btn--claude:hover:not(:disabled) {
   background: #8B7EDF;
-  border-color: rgba(212,207,255,.4);
-  box-shadow: 0 8px 26px rgba(94,82,168,.5);
-  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px rgba(212,207,255,.4), 0 6px 22px rgba(94,82,168,.5);
+  transform: translateY(-1px);
 }
 
-.gm-action-btn--gpt { color: var(--tx1); }
+.gm-action-btn--gpt { color: rgba(220,215,245,.75); }
 
 /* Model selector */
 .gm-model-selector { display:flex; align-items:center; gap:6px; padding:6px 0; flex-wrap:wrap; }
@@ -546,31 +556,30 @@ body::after {
 .gm-variant-tab--active { background:rgba(147,51,234,.25); border-color:var(--bd2); color:var(--lavender); }
 
 /* Preview */
-/* Preview — teal pill, matches floating style */
+/* Preview — teal ghost pill */
 .gm-preview-btn {
-  padding: 10px 22px;
-  background: rgba(94,160,160,.12);
-  border: 1px solid rgba(94,160,160,.28);
+  height: 40px;
+  padding: 0 20px;
+  background: rgba(94,160,160,.1);
+  border: 1px solid rgba(126,200,192,.25);
   color: var(--teal2);
   font-family: var(--font);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   border-radius: 100px;
-  transition: all .18s var(--easspring);
+  transition: all .16s var(--ease);
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.2);
-  backdrop-filter: blur(12px);
+  gap: 7px;
 }
 .gm-preview-btn:hover {
-  background: rgba(94,160,160,.22);
-  border-color: rgba(126,200,192,.5);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0,0,0,.28);
+  background: rgba(94,160,160,.2);
+  border-color: rgba(126,200,192,.45);
+  transform: translateY(-1px);
 }
+.gm-preview-btn:active { transform: translateY(1px); }
 .gm-preview-btn:disabled { opacity:.28; cursor:not-allowed; transform:none; }
 .gm-preview-panel { background:var(--bg2); border:1px solid rgba(20,184,166,.3); border-radius:16px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.45); }
 .gm-preview-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px 8px; border-bottom:1px solid rgba(20,184,166,.15); font-family:var(--mono); font-size:9px; font-weight:700; color:var(--teal2); letter-spacing:.1em; }
@@ -622,12 +631,12 @@ body::after {
   .gm-score__ring { width:46px; height:46px; }
   .gm-score__ring::after { inset:5px; }
   .gm-score__num { font-size:22px; }
-  .gm-output__topbar { padding:12px 0; gap:6px; }
-  .gm-output__actions { gap:5px; flex-wrap:wrap; }
-  .gm-action-btn { padding:9px 16px; font-size:12px; }
-  .gm-action-btn--claude { padding:9px 16px; font-size:12px; }
-  .gm-preview-btn { padding:9px 16px; font-size:12px; }
-  .gm-back { font-size:12px; }
+  .gm-output__topbar { padding:14px 0; gap:8px; }
+  .gm-output__actions { gap:6px; flex-wrap:wrap; }
+  .gm-action-btn { height:36px; padding:0 14px; font-size:12.5px; }
+  .gm-action-btn--claude { height:36px; padding:0 16px; font-size:12.5px; }
+  .gm-preview-btn { height:36px; padding:0 14px; font-size:12.5px; }
+  .gm-back { font-size:12.5px; }
 
   .gm-chat__input-row { padding:12px 14px 24px; gap:8px; }
   .gm-chat__input { font-size:14px; padding:12px 16px; min-height:80px; }
