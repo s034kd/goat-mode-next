@@ -449,13 +449,13 @@ body::after {
   align-items: center;
 }
 
-/* Ghost pill — clearly visible, clean */
+/* Action buttons — high enough contrast to see on dark bg */
 .gm-action-btn {
-  height: 40px;
-  padding: 0 20px;
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.13);
-  color: rgba(220,215,245,.85);
+  height: 42px;
+  padding: 0 22px;
+  background: var(--bg3);
+  border: 1px solid rgba(255,255,255,.18);
+  color: var(--tx0);
   font-family: var(--font);
   font-size: 14px;
   font-weight: 500;
@@ -466,52 +466,74 @@ body::after {
   display: flex;
   align-items: center;
   gap: 7px;
-  letter-spacing: .01em;
 }
 .gm-action-btn:hover:not(:disabled) {
-  background: rgba(255,255,255,.13);
-  border-color: rgba(255,255,255,.25);
+  background: var(--bg4);
+  border-color: rgba(255,255,255,.32);
   color: #fff;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.4);
 }
-.gm-action-btn:active:not(:disabled) {
-  transform: translateY(1px);
-  background: rgba(255,255,255,.05);
-}
+.gm-action-btn:active:not(:disabled) { transform: translateY(0); }
 .gm-action-btn:disabled { opacity:.28; cursor:not-allowed; }
 
-/* ✓ Copied state */
 .gm-action-btn--done {
   color: var(--teal2);
-  border-color: rgba(94,160,160,.35);
-  background: rgba(94,160,160,.08);
+  border-color: rgba(94,160,160,.5);
+  background: rgba(94,160,160,.15);
 }
 
-/* OPEN IN CLAUDE — primary CTA, stands out */
+/* OPEN IN CLAUDE — hero CTA */
 .gm-action-btn--claude {
-  height: 40px;
-  padding: 0 22px;
+  height: 42px;
+  padding: 0 24px;
   background: var(--purple);
-  border: none;
+  border: 1px solid rgba(212,207,255,.25);
   color: #fff;
   font-weight: 600;
   font-size: 14px;
-  box-shadow: 0 0 0 1px rgba(176,168,232,.3), 0 4px 16px rgba(94,82,168,.35);
+  box-shadow: 0 4px 18px rgba(94,82,168,.4);
 }
 .gm-action-btn--claude:hover:not(:disabled) {
   background: #8B7EDF;
-  box-shadow: 0 0 0 1px rgba(212,207,255,.4), 0 6px 22px rgba(94,82,168,.5);
-  transform: translateY(-1px);
+  border-color: rgba(212,207,255,.45);
+  box-shadow: 0 6px 24px rgba(94,82,168,.55);
+  transform: translateY(-2px);
 }
 
-.gm-action-btn--gpt { color: rgba(220,215,245,.75); }
+.gm-action-btn--gpt { color: var(--tx0); }
 
 /* Model selector */
 .gm-model-selector { display:flex; align-items:center; gap:6px; padding:6px 0; flex-wrap:wrap; }
 .gm-model-selector__label { font-family:var(--mono); font-size:8px; font-weight:700; letter-spacing:.18em; color:var(--tx3); text-transform:uppercase; margin-right:4px; }
-.gm-model-chip { padding:5px 12px; background:var(--bg1); border:1px solid rgba(147,51,234,.25); color:var(--tx3); font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; border-radius:6px; transition:all .2s; }
-.gm-model-chip:hover:not(:disabled) { background:var(--bg2); border-color:var(--bd2); color:var(--tx0); }
-.gm-model-chip--active { background:rgba(147,51,234,.25); border-color:var(--bd2); color:var(--lavender); box-shadow:0 0 14px rgba(147,51,234,.2); cursor:default; }
+.gm-model-chip {
+  padding: 7px 16px;
+  background: var(--bg2);
+  border: 1px solid rgba(255,255,255,.14);
+  color: var(--tx1);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .01em;
+  cursor: pointer;
+  border-radius: 100px;
+  transition: all .18s;
+  white-space: nowrap;
+}
+.gm-model-chip:hover:not(:disabled) {
+  background: var(--bg3);
+  border-color: rgba(255,255,255,.28);
+  color: var(--tx0);
+  transform: translateY(-1px);
+}
+.gm-model-chip--active {
+  background: var(--purple);
+  border-color: rgba(212,207,255,.3);
+  color: #fff;
+  font-weight: 600;
+  cursor: default;
+  box-shadow: 0 2px 12px rgba(94,82,168,.35);
+}
 
 /* Score row */
 .gm-score-row { display:flex; align-items:center; justify-content:space-between; gap:12px; animation:fadeIn .35s var(--easout) both; flex-wrap:wrap; }
@@ -556,12 +578,12 @@ body::after {
 .gm-variant-tab--active { background:rgba(147,51,234,.25); border-color:var(--bd2); color:var(--lavender); }
 
 /* Preview */
-/* Preview — teal ghost pill */
+/* Preview pill */
 .gm-preview-btn {
-  height: 40px;
-  padding: 0 20px;
-  background: rgba(94,160,160,.1);
-  border: 1px solid rgba(126,200,192,.25);
+  height: 42px;
+  padding: 0 22px;
+  background: rgba(94,160,160,.18);
+  border: 1px solid rgba(126,200,192,.4);
   color: var(--teal2);
   font-family: var(--font);
   font-size: 14px;
@@ -575,11 +597,12 @@ body::after {
   gap: 7px;
 }
 .gm-preview-btn:hover {
-  background: rgba(94,160,160,.2);
-  border-color: rgba(126,200,192,.45);
-  transform: translateY(-1px);
+  background: rgba(94,160,160,.28);
+  border-color: rgba(126,200,192,.6);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.3);
 }
-.gm-preview-btn:active { transform: translateY(1px); }
+.gm-preview-btn:active { transform: translateY(0); }
 .gm-preview-btn:disabled { opacity:.28; cursor:not-allowed; transform:none; }
 .gm-preview-panel { background:var(--bg2); border:1px solid rgba(20,184,166,.3); border-radius:16px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.45); }
 .gm-preview-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px 8px; border-bottom:1px solid rgba(20,184,166,.15); font-family:var(--mono); font-size:9px; font-weight:700; color:var(--teal2); letter-spacing:.1em; }
