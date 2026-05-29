@@ -1233,162 +1233,133 @@ export default function GoatmodePage() {
         {screen === 'input' && (
           <div className="gm-screen gm-input">
 
-            {/* ── Profile Banner / Setup ── */}
-            {!profile && !showProfileSetup && (
-              <div className="gm-profile-banner">
-                <span className="gm-profile-banner__label">
-                  Personalize GoatMode — tell me once, get better prompts every time
-                </span>
-                <button
-                  className="gm-profile-banner__btn"
-                  onClick={() => { setProfileForm({ role: '', industry: '', tools: '', goals: '' }); setShowProfileSetup(true); }}
-                >
-                  Set up
+            {/* ── Top navigation bar ── */}
+            <nav className="gm-nav">
+              <div className="gm-nav__brand">
+                <GoatLogo w={18} h={22} />
+                <span className="gm-nav__name">GOATMODE<span>.AI</span></span>
+              </div>
+              <div className="gm-nav__tabs">
+                <button className={`gm-nav-tab ${inputMode==='build'?'gm-nav-tab--on':''}`}
+                  onClick={()=>{setInputMode('build');setRawInput('');}}>
+                  ⚡ Build
+                </button>
+                <button className={`gm-nav-tab ${inputMode==='improve'?'gm-nav-tab--on':''}`}
+                  onClick={()=>{setInputMode('improve');setRawInput('');}}>
+                  ↑ Improve
                 </button>
               </div>
-            )}
-
-            {profile && !showProfileSetup && (
-              <div className="gm-profile-badge" onClick={handleProfileEdit}>
-                <span>👤 {profile.role} · {profile.industry}</span>
-                <span className="gm-profile-badge__edit">edit</span>
+              <div className="gm-nav__right">
+                {profile && !showProfileSetup ? (
+                  <button className="gm-nav__profile-btn" onClick={handleProfileEdit}>
+                    👤 {profile.role}
+                  </button>
+                ) : !showProfileSetup && (
+                  <button className="gm-nav__setup-btn"
+                    onClick={()=>{setProfileForm({role:'',industry:'',tools:'',goals:''});setShowProfileSetup(true);}}>
+                    Personalize
+                  </button>
+                )}
               </div>
-            )}
+            </nav>
 
+            {/* ── Profile setup form ── */}
             {showProfileSetup && (
               <div className="gm-profile-form">
                 <div className="gm-profile-form__title">Personalize GoatMode</div>
                 <div className="gm-profile-field">
                   <label>Your role</label>
-                  <input
-                    placeholder="e.g. Product Manager, Founder, Engineer"
-                    value={profileForm.role}
-                    onChange={e => setProfileForm(f => ({ ...f, role: e.target.value }))}
-                  />
+                  <input placeholder="e.g. Product Manager, Founder, Engineer"
+                    value={profileForm.role} onChange={e=>setProfileForm(f=>({...f,role:e.target.value}))} />
                 </div>
                 <div className="gm-profile-field">
                   <label>Industry</label>
-                  <input
-                    placeholder="e.g. SaaS, Healthcare, E-commerce"
-                    value={profileForm.industry}
-                    onChange={e => setProfileForm(f => ({ ...f, industry: e.target.value }))}
-                  />
+                  <input placeholder="e.g. SaaS, Healthcare, E-commerce"
+                    value={profileForm.industry} onChange={e=>setProfileForm(f=>({...f,industry:e.target.value}))} />
                 </div>
                 <div className="gm-profile-field">
                   <label>Tools you use</label>
-                  <input
-                    placeholder="e.g. Notion, Slack, Figma, Python"
-                    value={profileForm.tools}
-                    onChange={e => setProfileForm(f => ({ ...f, tools: e.target.value }))}
-                  />
+                  <input placeholder="e.g. Notion, Slack, Figma, Python"
+                    value={profileForm.tools} onChange={e=>setProfileForm(f=>({...f,tools:e.target.value}))} />
                 </div>
                 <div className="gm-profile-field">
                   <label>Core goal</label>
-                  <input
-                    placeholder="e.g. Launch a product, grow a team, close more deals"
-                    value={profileForm.goals}
-                    onChange={e => setProfileForm(f => ({ ...f, goals: e.target.value }))}
-                  />
+                  <input placeholder="e.g. Launch a product, grow a team, close more deals"
+                    value={profileForm.goals} onChange={e=>setProfileForm(f=>({...f,goals:e.target.value}))} />
                 </div>
                 <div className="gm-profile-form__actions">
                   <button className="gm-profile-form__save" onClick={handleProfileSave}>Save</button>
-                  <button className="gm-profile-form__dismiss" onClick={() => setShowProfileSetup(false)}>Dismiss</button>
+                  <button className="gm-profile-form__dismiss" onClick={()=>setShowProfileSetup(false)}>Dismiss</button>
                 </div>
               </div>
             )}
 
-            <div className="gm-input__hero">
-              <div className="gm-input__logo-wrap">
-                <GoatLogo w={48} h={56} />
+            {/* ── Hero headline ── */}
+            {!showProfileSetup && (
+              <div className="gm-hero">
+                <div className="gm-hero__eyebrow">AI Prompt Engineering</div>
+                <h1 className="gm-hero__title">
+                  {inputMode==='improve'
+                    ? <><span>Upgrade</span> your prompt.<br />Get 10× better results.</>
+                    : <>One idea in.<br /><span>Master prompt</span> out.</>}
+                </h1>
               </div>
-              <h1 className="gm-input__wordmark">GOATMODE<span>.AI</span></h1>
-              <p className="gm-input__sub">Turn any rough idea into a prompt that actually works</p>
-              <div className="gm-input__divider" />
-            </div>
+            )}
 
-            {/* Build / Improve toggle */}
-            <div className="gm-mode-toggle">
-              <button
-                className={`gm-mode-btn ${inputMode === 'build' ? 'gm-mode-btn--active' : ''}`}
-                onClick={() => { setInputMode('build'); setRawInput(''); }}
-              >
-                ⚡ Build New
-              </button>
-              <button
-                className={`gm-mode-btn ${inputMode === 'improve' ? 'gm-mode-btn--active' : ''}`}
-                onClick={() => { setInputMode('improve'); setRawInput(''); }}
-              >
-                ↑ Improve Mine
-              </button>
-            </div>
-
-            {/* Textarea */}
-            <div className="gm-input__box">
+            {/* ── Main form card ── */}
+            <div className="gm-form-card">
               <textarea
                 ref={textareaRef}
                 className="gm-textarea"
-                placeholder={inputMode === 'improve'
-                  ? 'Paste your existing prompt here to make it 10× better...'
-                  : 'What do you need to get done? Describe it like you\'d tell a smart colleague...'}
+                placeholder={inputMode==='improve'
+                  ? 'Paste your existing prompt here...'
+                  : 'Describe what you need — email, image, code, strategy, anything...'}
                 value={rawInput}
-                onChange={e => setRawInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleStart(); }}
-                rows={inputMode === 'improve' ? 7 : 4}
-                maxLength={inputMode === 'improve' ? 3000 : 1000}
+                onChange={e=>setRawInput(e.target.value)}
+                onKeyDown={e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))handleStart();}}
+                rows={inputMode==='improve'?6:4}
+                maxLength={inputMode==='improve'?3000:1000}
               />
-              <div className="gm-textarea__footer">
-                {liveType && inputMode === 'build' ? (
-                  <div className="gm-type-badge">
-                    <span className="gm-type-badge__dot" />
-                    <span>DETECTED: {(TYPE_LABELS[liveType] ?? liveType).toUpperCase()}</span>
-                  </div>
-                ) : <div />}
-                <span className="gm-textarea__count">
-                  {rawInput.length} / {inputMode === 'improve' ? '3000' : '1000'}
-                </span>
+
+              <div className="gm-form-card__footer">
+                <div>
+                  {liveType && inputMode==='build' && (
+                    <div className="gm-type-badge">
+                      <span className="gm-type-badge__dot" />
+                      <span>{(TYPE_LABELS[liveType]??liveType).toUpperCase()}</span>
+                    </div>
+                  )}
+                </div>
+                <span className="gm-textarea__count">{rawInput.length} / {inputMode==='improve'?'3000':'1000'}</span>
+              </div>
+
+              <div className="gm-form-card__controls">
+                <div className="gm-model-row">
+                  <span className="gm-model-row__label">FOR</span>
+                  {([['claude','Claude'],['gpt4','ChatGPT'],['gemini','Gemini']] as [TargetModel,string][]).map(([m,label])=>(
+                    <button key={m}
+                      className={`gm-model-pill ${targetModel===m?'gm-model-pill--on':''}`}
+                      onClick={()=>{setTargetModel(m);targetModelRef.current=m;}}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button className="gm-btn-primary" onClick={handleStart} disabled={rawInput.trim().length<3}>
+                  <span className="gm-btn-primary__icon">{inputMode==='improve'?'↑':'⚡'}</span>
+                  <span className="gm-btn-primary__label">{inputMode==='improve'?'IMPROVE THIS PROMPT':'ENGINEER MASTER PROMPT'}</span>
+                  <span className="gm-btn-primary__hint">⌘↵</span>
+                </button>
               </div>
             </div>
 
-            {/* Target model selector */}
-            <div className="gm-target-selector">
-              <span className="gm-target-selector__label">BUILD FOR</span>
-              {([['claude','Claude'],['gpt4','ChatGPT'],['gemini','Gemini']] as [TargetModel,string][]).map(([m,label]) => (
-                <button
-                  key={m}
-                  className={`gm-target-btn ${targetModel === m ? 'gm-target-btn--active' : ''}`}
-                  onClick={() => { setTargetModel(m); targetModelRef.current = m; }}
-                >{label}</button>
-              ))}
-            </div>
-
-            {/* CTA button */}
-            <button
-              className="gm-btn-primary"
-              onClick={handleStart}
-              disabled={rawInput.trim().length < 3}
-            >
-              <span className="gm-btn-primary__icon">{inputMode === 'improve' ? '↑' : '⚡'}</span>
-              <span className="gm-btn-primary__label">
-                {inputMode === 'improve' ? 'IMPROVE THIS PROMPT' : 'ENGINEER MASTER PROMPT'}
-              </span>
-              <span className="gm-btn-primary__hint">⌘↵</span>
-            </button>
-
-            {/* Example chips (build mode only) */}
-            {inputMode === 'build' && (
+            {/* ── Examples ── */}
+            {inputMode==='build' && (
               <div className="gm-examples">
                 <div className="gm-examples__label">TRY AN EXAMPLE</div>
                 <div className="gm-examples__grid">
-                  {[
-                    'Email my boss asking for a raise',
-                    'Cold outreach to a potential client',
-                    'Explain quantum computing simply',
-                    'Write a 30-day content strategy',
-                    'Analyze our Q3 performance data',
-                    'Build a REST API in TypeScript',
-                  ].map(ex => (
+                  {['Email my boss asking for a raise','Cold outreach to a potential client','Explain quantum computing simply','Write a 30-day content strategy','Analyze our Q3 performance data','Build a REST API in TypeScript'].map(ex=>(
                     <button key={ex} className="gm-examples__chip"
-                      onClick={() => { setRawInput(ex); setTimeout(() => textareaRef.current?.focus(), 50); }}>
+                      onClick={()=>{setRawInput(ex);setTimeout(()=>textareaRef.current?.focus(),50);}}>
                       {ex}
                     </button>
                   ))}
@@ -1396,25 +1367,21 @@ export default function GoatmodePage() {
               </div>
             )}
 
-            {/* History */}
-            {history.length > 0 && (
+            {/* ── History ── */}
+            {history.length>0 && (
               <div className="gm-history">
                 <div className="gm-history__label">RECENT</div>
                 <div className="gm-history__list">
-                  {history.map(h => (
+                  {history.map(h=>(
                     <button key={h.id} className="gm-history__pill"
-                      onClick={() => {
-                        setPrompt(h.prompt); setDisplayed(h.prompt);
-                        setRawInput(h.raw); setType(h.type);
-                        setStreamDone(true); setPromptScore(calcScore(h.prompt));
-                        setVariantA(''); setVariantB(''); setActiveVariant('orig');
-                        setPreviewText(''); setShowPreviewState(false);
-                        setScreen('output');
+                      onClick={()=>{
+                        setPrompt(h.prompt);setDisplayed(h.prompt);setRawInput(h.raw);setType(h.type);
+                        setStreamDone(true);setPromptScore(calcScore(h.prompt));
+                        setVariantA('');setVariantB('');setActiveVariant('orig');
+                        setPreviewText('');setShowPreviewState(false);setScreen('output');
                       }}>
-                      <span className="gm-history__pill-type">{TYPE_LABELS[h.type] ?? h.type}</span>
-                      <span className="gm-history__pill-text">
-                        {h.raw.length > 46 ? h.raw.slice(0, 46) + '…' : h.raw}
-                      </span>
+                      <span className="gm-history__pill-type">{TYPE_LABELS[h.type]??h.type}</span>
+                      <span className="gm-history__pill-text">{h.raw.length>46?h.raw.slice(0,46)+'…':h.raw}</span>
                     </button>
                   ))}
                 </div>
